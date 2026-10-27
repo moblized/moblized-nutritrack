@@ -46,6 +46,22 @@ jobs:
           set -o pipefail
           ./gradlew --no-daemon testReleaseUnitTest assembleRelease 2>&1 | tee gradle.log
 
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          total = fails = skipped = 0
+          lines = []
+          for f in glob.glob("app/build/test-results/testReleaseUnitTest/*.xml"):
+              r = ET.parse(f).getroot()
+              total += int(r.get("tests", 0)); fails += int(r.get("failures", 0)) + int(r.get("errors", 0)); skipped += int(r.get("skipped", 0))
+              out = r.findtext("system-out") or ""
+              lines += [l for l in out.splitlines() if l.startswith(("MATCH", "MISMATCH"))]
+          msg = f"{total} tests, {fails} failed, {skipped} skipped%0A" + "%0A".join(lines[:80])
+          print(f"::notice title=Unit tests::{msg}")
+          PY
+
       - name: Report errors
         if: steps.db.outcome == 'failure' || steps.gradle.outcome == 'failure'
         run: |
