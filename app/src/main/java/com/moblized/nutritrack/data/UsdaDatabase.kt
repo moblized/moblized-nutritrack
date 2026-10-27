@@ -9,7 +9,7 @@ import java.io.File
  * Read-only access to the bundled USDA FoodData Central database (assets/usda.db).
  * The asset is copied to app storage on first use and whenever the app is updated.
  */
-class UsdaDatabase(private val context: Context) {
+class UsdaDatabase(private val context: Context) : FoodCandidateSource {
     @Volatile
     private var db: SQLiteDatabase? = null
 
@@ -72,7 +72,7 @@ class UsdaDatabase(private val context: Context) {
     data class Candidate(val id: Long, val description: String, val source: Int, val portions: List<Portion>)
 
     /** Search results with their portions, used to auto-match recipe ingredients. */
-    fun candidates(query: String, limit: Int = 60): List<Candidate> {
+    override fun candidates(query: String, limit: Int): List<Candidate> {
         val tokens = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
         val sql = """
@@ -104,7 +104,7 @@ class UsdaDatabase(private val context: Context) {
         return portions
     }
 
-    fun food(id: Long): Food? {
+    override fun food(id: Long): Food? {
         return open().rawQuery(
             "SELECT description, category, source, nutrients, portions FROM foods WHERE id = ?",
             arrayOf(id.toString()),

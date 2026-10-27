@@ -44,7 +44,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          ./gradlew --no-daemon assembleRelease 2>&1 | tee gradle.log
+          ./gradlew --no-daemon testReleaseUnitTest assembleRelease 2>&1 | tee gradle.log
 
       - name: Report errors
         if: steps.db.outcome == 'failure' || steps.gradle.outcome == 'failure'

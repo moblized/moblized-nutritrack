@@ -192,8 +192,14 @@ object IngredientParser {
     }
 }
 
+/** Where the matcher looks up foods; the bundled USDA database in the app, a JDBC copy in tests. */
+interface FoodCandidateSource {
+    fun candidates(query: String, limit: Int): List<UsdaDatabase.Candidate>
+    fun food(id: Long): Food?
+}
+
 /** Finds the best USDA food for a recipe line and converts its amount to grams. */
-class IngredientMatcher(private val usda: UsdaDatabase) {
+class IngredientMatcher(private val usda: FoodCandidateSource) {
 
     private val bad = Regex(
         "\\b(meatless|imitation|substitute|vegetarian|fat free|nonfat|low fat|lowfat|reduced|light|no|without|" +
