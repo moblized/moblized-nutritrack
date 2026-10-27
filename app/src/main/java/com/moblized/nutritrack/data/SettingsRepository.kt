@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -54,7 +55,15 @@ data class Settings(
     val overrides: Map<Int, Double> = emptyMap(),
     val healthConnect: Boolean = false,
     val profileSet: Boolean = false,
-)
+    /** Keep the profile weight in sync with the latest weigh-in in Health Connect (smart scale). */
+    val weightSync: Boolean = false,
+    val lastWeighInTime: Long = 0L,
+    val lastWeighInSource: String = "",
+    val mealieUrl: String = "",
+    val mealieToken: String = "",
+) {
+    val mealieConfigured: Boolean get() = mealieUrl.isNotBlank() && mealieToken.isNotBlank()
+}
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -76,6 +85,11 @@ class SettingsRepository(private val context: Context) {
         val overrides = stringPreferencesKey("target_overrides")
         val health = booleanPreferencesKey("health_connect")
         val profileSet = booleanPreferencesKey("profile_set")
+        val weightSync = booleanPreferencesKey("weight_sync")
+        val weighInTime = longPreferencesKey("weigh_in_time")
+        val weighInSource = stringPreferencesKey("weigh_in_source")
+        val mealieUrl = stringPreferencesKey("mealie_url")
+        val mealieToken = stringPreferencesKey("mealie_token")
     }
 
     val flow: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -106,6 +120,11 @@ class SettingsRepository(private val context: Context) {
             overrides = NutrientCodec.decode(this[K.overrides]),
             healthConnect = this[K.health] ?: d.healthConnect,
             profileSet = this[K.profileSet] ?: false,
+            weightSync = this[K.weightSync] ?: false,
+            lastWeighInTime = this[K.weighInTime] ?: 0L,
+            lastWeighInSource = this[K.weighInSource] ?: "",
+            mealieUrl = this[K.mealieUrl] ?: "",
+            mealieToken = this[K.mealieToken] ?: "",
         )
     }
 
@@ -125,6 +144,19 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPureBlack(on: Boolean) = context.dataStore.edit { it[K.pureBlack] = on }
     suspend fun setUnits(u: Units) = context.dataStore.edit { it[K.units] = u.name }
     suspend fun setHealthConnect(on: Boolean) = context.dataStore.edit { it[K.health] = on }
+    suspend fun setWeightSync(on: Boolean) = context.dataStore.edit { it[K.weightSync] = on }
+
+    /** Applies a weigh-in from the scale to the profile and remembers it so it is only applied once. */
+    suspend fun applyWeighIn(kg: Double, time: Long, source: String) = context.dataStore.edit {
+        it[K.weight] = kg
+        it[K.weighInTime] = time
+        it[K.weighInSource] = source
+    }
+
+    suspend fun setMealie(url: String, token: String) = context.dataStore.edit {
+        it[K.mealieUrl] = url.trim().trimEnd('/')
+        it[K.mealieToken] = token.trim()
+    }
 
     suspend fun setCalorieOverride(kcal: Int?) = context.dataStore.edit {
         it.remove(K.kcal)

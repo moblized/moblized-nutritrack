@@ -14,7 +14,9 @@ import java.time.LocalDate
 
 /** App-wide dependencies and the operations the screens use. */
 class AppGraph(private val context: Context) {
-    val db: UserDatabase = Room.databaseBuilder(context, UserDatabase::class.java, "nutritrack.db").build()
+    val db: UserDatabase = Room.databaseBuilder(context, UserDatabase::class.java, "nutritrack.db")
+        .addMigrations(MIGRATION_1_2)
+        .build()
     val usda = UsdaDatabase(context)
     val settings = SettingsRepository(context)
     val health = HealthSync(context)
@@ -133,6 +135,32 @@ class AppGraph(private val context: Context) {
         val to = LocalDate.now()
         val entries = db.diary().range(to.minusDays(days).toString(), to.toString())
         return health.upsert(entries)
+    }
+
+    // ---------- smart scale (via Health Connect) ----------
+
+    /** Copies the newest scale weigh-in from Health Connect into the profile. Returns it when applied. */
+    suspend fun syncWeight(): HealthSync.WeighIn? {
+        val s = settings.current()
+        if (!s.weightSync) return null
+        val w = health.latestWeighIn() ?: return null
+        val t = w.time.toEpochMilli()
+        if (t <= s.lastWeighInTime) return null
+        settings.applyWeighIn(w.kg, t, appLabel(w.sourcePackage))
+        refreshWidget()
+        return w
+    }
+
+    fun appLabel(pkg: String): String = runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg)
+
+    // ---------- Mealie ----------
+
+    suspend fun mealie(): MealieClient? {
+        val s = settings.current()
+        return if (s.mealieConfigured) MealieClient(s.mealieUrl, s.mealieToken) else null
     }
 
     fun refreshWidget() {

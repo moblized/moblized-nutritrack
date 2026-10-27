@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -31,7 +32,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.moblized.nutritrack.data.FoodSource
+import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Settings
+import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.time.LocalDate
 
@@ -54,11 +57,15 @@ object Routes {
         "custom/$id" + (barcode?.let { "?barcode=" + URLEncoder.encode(it, "UTF-8") } ?: "")
     fun recipe(id: Long) = "recipe/$id"
     const val TARGETS = "targets"
+    const val MEALIE = "mealie"
+    fun mealieImport(slug: String, date: LocalDate?, meal: Int) =
+        "mealie/import/" + android.net.Uri.encode(slug) + "?date=" + (date?.toString() ?: "") + "&meal=$meal"
 }
 
 @Composable
 fun AppNav(settings: Settings) {
     val nav = rememberNavController()
+    val scope = rememberCoroutineScope()
     var dateText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val date = LocalDate.parse(dateText)
     val setDate: (LocalDate) -> Unit = { dateText = it.toString() }
@@ -79,6 +86,19 @@ fun AppNav(settings: Settings) {
                         onOpenEntry = { e -> nav.navigate(Routes.food(FoodSource.of(e.source), e.refId, date, e.meal, e.id)) },
                         onShowNutrients = { nav.switchTab("nutrients") },
                         onSetupProfile = { nav.switchTab("settings") },
+                        onOpenMealPlan = { e ->
+                            val slug = e.recipeSlug
+                            if (slug != null) {
+                                scope.launch {
+                                    val linked = Graph.app.db.recipes().byMealieSlug(slug)
+                                    if (linked != null) {
+                                        nav.navigate(Routes.food(FoodSource.RECIPE, linked.id, date, e.meal))
+                                    } else {
+                                        nav.navigate(Routes.mealieImport(slug, date, e.meal))
+                                    }
+                                }
+                            }
+                        },
                     )
                 }
                 composable("nutrients") {
@@ -88,6 +108,7 @@ fun AppNav(settings: Settings) {
                     FoodsScreen(
                         onOpenRecipe = { nav.navigate(Routes.recipe(it)) },
                         onOpenCustom = { nav.navigate(Routes.custom(it)) },
+                        onImportMealie = if (settings.mealieConfigured) ({ nav.navigate(Routes.MEALIE) }) else null,
                     )
                 }
                 composable("settings") {
@@ -184,6 +205,33 @@ fun AppNav(settings: Settings) {
                             nav.popBackStack()
                         },
                         onDone = { nav.popBackStack() },
+                    )
+                }
+                composable(Routes.MEALIE) {
+                    MealieBrowseScreen(
+                        onBack = { nav.popBackStack() },
+                        onOpen = { slug -> nav.navigate(Routes.mealieImport(slug, null, 0)) },
+                    )
+                }
+                composable(
+                    "mealie/import/{slug}?date={date}&meal={meal}",
+                    arguments = listOf(
+                        navArgument("slug") { type = NavType.StringType },
+                        navArgument("date") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("meal") { type = NavType.IntType; defaultValue = 0 },
+                    ),
+                ) { entry ->
+                    val slug = entry.arguments?.getString("slug").orEmpty()
+                    val logDate = entry.arguments?.getString("date")?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) }
+                    val meal = entry.arguments?.getInt("meal") ?: 0
+                    MealieImportScreen(
+                        slug = slug,
+                        onBack = { nav.popBackStack() },
+                        onImported = { recipeId ->
+                            nav.popBackStack()
+                            // Opened from the meal plan: go straight to logging it.
+                            if (logDate != null) nav.navigate(Routes.food(FoodSource.RECIPE, recipeId, logDate, meal))
+                        },
                     )
                 }
                 composable(Routes.TARGETS) {

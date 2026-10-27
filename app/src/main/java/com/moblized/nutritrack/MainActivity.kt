@@ -13,11 +13,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Settings
 import com.moblized.nutritrack.data.ThemeMode
 import com.moblized.nutritrack.ui.AppNav
 import com.moblized.nutritrack.ui.theme.NutriTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +45,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Pick up a new weigh-in from the smart scale (Health Connect only allows reads in the foreground).
+        lifecycleScope.launch { runCatching { Graph.app.syncWeight() } }
     }
 
     override fun onStop() {

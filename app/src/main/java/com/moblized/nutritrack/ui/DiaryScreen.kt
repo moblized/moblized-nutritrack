@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moblized.nutritrack.data.DiaryEntry
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Meals
+import com.moblized.nutritrack.data.MealieException
+import com.moblized.nutritrack.data.MealiePlanEntry
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.NutrientGroup
 import com.moblized.nutritrack.data.Nutrients
@@ -68,11 +71,26 @@ fun DiaryScreen(
     onOpenEntry: (DiaryEntry) -> Unit,
     onShowNutrients: () -> Unit,
     onSetupProfile: () -> Unit,
+    onOpenMealPlan: (MealiePlanEntry) -> Unit,
 ) {
     val entries by remember(date) { Graph.app.db.diary().observeDay(date.toString()) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val totals = remember(entries) { sumNutrients(entries.map { NutrientCodec.decode(it.nutrients) }) }
     val targets = remember(settings) { Targets.compute(settings) }
+
+    // Today's Mealie meal plan, when a Mealie server is connected.
+    var plan by remember(date) { mutableStateOf<List<MealiePlanEntry>>(emptyList()) }
+    var planError by remember(date) { mutableStateOf<String?>(null) }
+    LaunchedEffect(date, settings.mealieUrl, settings.mealieToken) {
+        plan = emptyList()
+        planError = null
+        val client = Graph.app.mealie() ?: return@LaunchedEffect
+        try {
+            plan = client.mealPlan(date).sortedBy { it.meal }
+        } catch (e: MealieException) {
+            planError = e.message
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -109,6 +127,9 @@ fun DiaryScreen(
                 }
             }
             item { SummaryCard(totals, targets) }
+            if (plan.isNotEmpty() || planError != null) {
+                item { MealPlanCard(plan, planError, onOpenMealPlan) }
+            }
             item { HighlightsCard(totals, targets, onShowNutrients) }
             for (meal in Meals.names.indices) {
                 item(key = "meal-$meal") {
@@ -194,6 +215,48 @@ private fun SummaryCard(totals: Map<Int, Double>, targets: Map<Int, Double>) {
                 MacroColumn("Protein", totals[Nutrients.PROTEIN] ?: 0.0, targets[Nutrients.PROTEIN], NutrientGroup.PROTEIN.color(), Modifier.weight(1f))
                 MacroColumn("Carbs", totals[Nutrients.CARBS] ?: 0.0, targets[Nutrients.CARBS], NutrientGroup.CARBS.color(), Modifier.weight(1f))
                 MacroColumn("Fat", totals[Nutrients.FAT] ?: 0.0, targets[Nutrients.FAT], NutrientGroup.LIPIDS.color(), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealPlanCard(plan: List<MealiePlanEntry>, error: String?, onOpen: (MealiePlanEntry) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            Text(
+                "Mealie meal plan",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            if (error != null) {
+                Text(
+                    error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            plan.forEach { e ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = e.recipeSlug != null) { onOpen(e) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(e.displayName, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            e.entryType.replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (e.recipeSlug != null) {
+                        Text("Log", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
         }
     }

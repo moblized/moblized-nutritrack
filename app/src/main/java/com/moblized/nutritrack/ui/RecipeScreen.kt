@@ -117,6 +117,7 @@ fun RecipeScreen(
                                     name = name.trim(),
                                     servings = servings,
                                     createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                                    mealieSlug = existing?.mealieSlug,
                                 )
                                 val id = Graph.app.saveRecipe(r, items.toList())
                                 onSaved(id)
@@ -258,7 +259,7 @@ private fun SummaryStat(label: String, value: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun IngredientPicker(excludeRecipeId: Long, onDismiss: () -> Unit, onPicked: (RecipeItem) -> Unit) {
+internal fun IngredientPicker(excludeRecipeId: Long, onDismiss: () -> Unit, onPicked: (RecipeItem) -> Unit) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -322,7 +323,7 @@ private fun IngredientPicker(excludeRecipeId: Long, onDismiss: () -> Unit, onPic
 }
 
 @Composable
-private fun IngredientAmountDialog(
+internal fun IngredientAmountDialog(
     source: FoodSource,
     id: Long,
     initial: RecipeItem?,

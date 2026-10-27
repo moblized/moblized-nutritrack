@@ -69,6 +69,41 @@ class UsdaDatabase(private val context: Context) {
         return out
     }
 
+    data class Candidate(val id: Long, val description: String, val source: Int, val portions: List<Portion>)
+
+    /** Search results with their portions, used to auto-match recipe ingredients. */
+    fun candidates(query: String, limit: Int = 60): List<Candidate> {
+        val tokens = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return emptyList()
+        val sql = """
+            SELECT f.id, f.description, f.source, f.portions
+            FROM food_fts JOIN foods f ON f.id = food_fts.docid
+            WHERE food_fts MATCH ?
+            ORDER BY (f.description LIKE ?) DESC, length(f.description) ASC, f.n_count DESC
+            LIMIT $limit
+        """.trimIndent()
+        val out = ArrayList<Candidate>()
+        open().rawQuery(sql, arrayOf(tokens.joinToString(" ") { "$it*" }, tokens.first() + "%")).use { c ->
+            while (c.moveToNext()) {
+                out += Candidate(c.getLong(0), c.getString(1), c.getInt(2), parsePortions(c.getString(3)))
+            }
+        }
+        return out
+    }
+
+    private fun parsePortions(json: String?): List<Portion> {
+        val portions = ArrayList<Portion>()
+        runCatching {
+            val arr = JSONArray(json ?: "[]")
+            for (i in 0 until arr.length()) {
+                val p = arr.getJSONArray(i)
+                val grams = p.getDouble(1)
+                if (grams > 0) portions += Portion(p.getString(0), grams)
+            }
+        }
+        return portions
+    }
+
     fun food(id: Long): Food? {
         return open().rawQuery(
             "SELECT description, category, source, nutrients, portions FROM foods WHERE id = ?",

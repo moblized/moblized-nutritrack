@@ -9,6 +9,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "diary", indices = [Index("date")])
@@ -48,6 +50,8 @@ data class Recipe(
     val name: String,
     val servings: Double = 1.0,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Slug of the Mealie recipe this was imported from, if any. */
+    val mealieSlug: String? = null,
 )
 
 @Entity(tableName = "recipe_items", indices = [Index("recipeId")])
@@ -124,6 +128,12 @@ interface RecipeDao {
     @Query("SELECT * FROM recipes ORDER BY name COLLATE NOCASE")
     fun observeAll(): Flow<List<Recipe>>
 
+    @Query("SELECT * FROM recipes WHERE mealieSlug = :slug LIMIT 1")
+    suspend fun byMealieSlug(slug: String): Recipe?
+
+    @Query("SELECT * FROM recipes WHERE mealieSlug IS NOT NULL")
+    fun observeMealieLinked(): Flow<List<Recipe>>
+
     @Query("SELECT * FROM recipes WHERE id = :id")
     suspend fun get(id: Long): Recipe?
 
@@ -151,11 +161,17 @@ interface RecipeDao {
 
 @Database(
     entities = [DiaryEntry::class, CustomFood::class, Recipe::class, RecipeItem::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class UserDatabase : RoomDatabase() {
     abstract fun diary(): DiaryDao
     abstract fun customFoods(): CustomFoodDao
     abstract fun recipes(): RecipeDao
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE recipes ADD COLUMN mealieSlug TEXT")
+    }
 }

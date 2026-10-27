@@ -36,7 +36,7 @@ import com.moblized.nutritrack.data.Nutrients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit) {
+fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit, onImportMealie: (() -> Unit)?) {
     val recipes by remember { Graph.app.db.recipes().observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
     val foods by remember { Graph.app.db.customFoods().observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -49,6 +49,14 @@ fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit) {
             contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = 24.dp),
         ) {
             item { SectionTitle("Recipes", "New recipe") { onOpenRecipe(0) } }
+            if (onImportMealie != null) {
+                item {
+                    androidx.compose.material3.TextButton(
+                        onClick = onImportMealie,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    ) { Text("Import from Mealie") }
+                }
+            }
             if (recipes.isEmpty()) {
                 item { EmptyHint("Combine ingredients once, then log a serving in one tap.") }
             }
@@ -56,7 +64,9 @@ fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit) {
                 ListItem(
                     modifier = Modifier.clickable { onOpenRecipe(r.id) },
                     headlineContent = { Text(r.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = { Text("${fmtQty(r.servings)} servings") },
+                    supportingContent = {
+                        Text("${fmtQty(r.servings)} servings" + if (r.mealieSlug != null) " · from Mealie" else "")
+                    },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }

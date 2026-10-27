@@ -5,14 +5,19 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.MealType
 import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Mass
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-/** Writes diary entries to Health Connect (which Samsung Health can read). */
+/** Writes diary entries to Health Connect (which Samsung Health can read) and reads scale weigh-ins. */
 class HealthSync(private val context: Context) {
 
     val permissions: Set<String> = setOf(HealthPermission.getWritePermission(NutritionRecord::class))
@@ -46,6 +51,34 @@ class HealthSync(private val context: Context) {
     }
 
     private fun clientId(id: Long) = "nutritrack-entry-$id"
+
+    // ---------- weight from a smart scale ----------
+
+    val weightPermissions: Set<String> = setOf(HealthPermission.getReadPermission(WeightRecord::class))
+
+    suspend fun hasWeightPermission(): Boolean = isAvailable() && runCatching {
+        client().permissionController.getGrantedPermissions().containsAll(weightPermissions)
+    }.getOrDefault(false)
+
+    data class WeighIn(val kg: Double, val time: Instant, val sourcePackage: String)
+
+    /** The most recent weight any app (e.g. a smart-scale app) saved to Health Connect in the last 30 days. */
+    suspend fun latestWeighIn(): WeighIn? {
+        if (!hasWeightPermission()) return null
+        return runCatching {
+            val response = client().readRecords(
+                ReadRecordsRequest(
+                    recordType = WeightRecord::class,
+                    timeRangeFilter = TimeRangeFilter.after(Instant.now().minus(Duration.ofDays(30))),
+                    ascendingOrder = false,
+                    pageSize = 1,
+                ),
+            )
+            response.records.firstOrNull()?.let {
+                WeighIn(it.weight.inKilograms, it.time, it.metadata.dataOrigin.packageName)
+            }
+        }.getOrNull()
+    }
 
     private fun toRecord(e: DiaryEntry): NutritionRecord {
         val n = NutrientCodec.decode(e.nutrients)

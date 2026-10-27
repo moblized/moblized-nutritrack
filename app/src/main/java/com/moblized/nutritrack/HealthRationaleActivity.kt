@@ -31,10 +31,10 @@ class HealthRationaleActivity : ComponentActivity() {
                         Text("How NutriTrack uses Health Connect", style = MaterialTheme.typography.headlineSmall)
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "NutriTrack only writes nutrition data. Each food you log (calories, macros, " +
-                                "vitamins and minerals) is saved to Health Connect so apps like Samsung Health can show it. " +
-                                "NutriTrack never reads your health data, and nothing leaves your phone except " +
-                                "barcode lookups sent to Open Food Facts.",
+                            "NutriTrack writes nutrition data: each food you log (calories, macros, vitamins and " +
+                                "minerals) is saved to Health Connect so apps like Samsung Health can show it. " +
+                                "If you turn on scale sync, it also reads your latest weight so your calorie and protein " +
+                                "targets follow it. It reads nothing else, and your health data never leaves your phone.",
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Spacer(Modifier.height(24.dp))

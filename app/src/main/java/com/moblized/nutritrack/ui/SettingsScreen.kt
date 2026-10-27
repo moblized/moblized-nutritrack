@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,10 +42,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import com.moblized.nutritrack.data.Activity
 import com.moblized.nutritrack.data.Goal
+import com.moblized.nutritrack.data.MealieClient
+import com.moblized.nutritrack.data.MealieException
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Profile
 import com.moblized.nutritrack.data.Settings
@@ -76,7 +81,8 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
     var feet by remember(us) { mutableStateOf((totalIn / 12).toInt().toString()) }
     var inches by remember(us) { mutableStateOf((totalIn % 12).roundToInt().toString()) }
     var cm by remember(us) { mutableStateOf(p.heightCm.roundToInt().toString()) }
-    var weight by remember(us) {
+    // Re-seeded when a scale weigh-in updates the profile.
+    var weight by remember(us, settings.lastWeighInTime) {
         mutableStateOf(if (us) (p.weightKg / KG_PER_LB).roundToInt().toString() else fmtQty((p.weightKg * 10).roundToInt() / 10.0))
     }
     var kcalText by remember { mutableStateOf(settings.calorieOverride?.toString() ?: "") }
@@ -86,6 +92,26 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
 
     var hcAvailable by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { hcAvailable = Graph.app.health.isAvailable() }
+    val weightLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
+        scope.launch {
+            val ok = granted.containsAll(Graph.app.health.weightPermissions)
+            repo.setWeightSync(ok)
+            if (ok) {
+                val w = Graph.app.syncWeight()
+                snackbar.showSnackbar(
+                    if (w != null) "Weight updated to ${fmtWeight(w.kg, us)} from your scale"
+                    else "Connected. Your next weigh-in will update your weight.",
+                )
+            } else {
+                snackbar.showSnackbar("Weight permission wasn't granted")
+            }
+        }
+    }
+    var mealieUrl by remember { mutableStateOf(settings.mealieUrl) }
+    var mealieToken by remember { mutableStateOf(settings.mealieToken) }
+    var mealieStatus by remember { mutableStateOf<String?>(null) }
+    var mealieTesting by remember { mutableStateOf(false) }
+
     val hcLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
         scope.launch {
             val ok = granted.containsAll(Graph.app.health.permissions)
@@ -289,6 +315,103 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
+            item { Section("Smart scale") }
+            item {
+                if (hcAvailable) {
+                    SwitchLine(
+                        title = "Update my weight from my scale",
+                        subtitle = "Uses the latest weigh-in your scale app (like Libre Scale) saves to Health Connect, " +
+                            "so calorie and protein targets follow your weight",
+                        checked = settings.weightSync,
+                    ) { on ->
+                        if (on) {
+                            weightLauncher.launch(Graph.app.health.weightPermissions)
+                        } else {
+                            scope.launch { repo.setWeightSync(false) }
+                        }
+                    }
+                    if (settings.weightSync && settings.lastWeighInTime > 0) {
+                        val whenText = java.time.Instant.ofEpochMilli(settings.lastWeighInTime)
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        Text(
+                            "Last weigh-in: ${fmtWeight(p.weightKg, us)} on ${dateLabel(whenText)}" +
+                                (if (settings.lastWeighInSource.isNotBlank()) " from ${settings.lastWeighInSource}" else ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        "Needs Health Connect, which isn't available on this phone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            item { Section("Mealie") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = mealieUrl,
+                        onValueChange = { mealieUrl = it; mealieStatus = null },
+                        label = { Text("Server address") },
+                        placeholder = { Text("http://192.168.1.10:9000") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = mealieToken,
+                        onValueChange = { mealieToken = it; mealieStatus = null },
+                        label = { Text("API token") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = mealieUrl.isNotBlank() && mealieToken.isNotBlank() && !mealieTesting,
+                            onClick = {
+                                mealieTesting = true
+                                scope.launch {
+                                    repo.setMealie(mealieUrl, mealieToken)
+                                    mealieStatus = try {
+                                        val who = MealieClient(mealieUrl, mealieToken).whoAmI()
+                                        "Connected" + (if (who.isNotBlank()) " as $who" else "")
+                                    } catch (e: MealieException) {
+                                        e.message ?: "Couldn't connect"
+                                    }
+                                    mealieTesting = false
+                                }
+                            },
+                        ) { Text(if (mealieTesting) "Testing…" else "Save & test") }
+                        if (settings.mealieConfigured) {
+                            TextButton(onClick = {
+                                mealieUrl = ""
+                                mealieToken = ""
+                                mealieStatus = null
+                                scope.launch { repo.setMealie("", "") }
+                            }) { Text("Disconnect") }
+                        }
+                    }
+                    mealieStatus?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (it.startsWith("Connected")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        "Create a token in Mealie under your profile → API Tokens. Once connected, import recipes from " +
+                            "My foods, and your Mealie meal plan shows on the diary.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             item { Section("About") }
             item {
                 val count = remember { mutableIntStateOf(0) }
@@ -306,6 +429,9 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
         }
     }
 }
+
+private fun fmtWeight(kg: Double, us: Boolean): String =
+    if (us) "${fmtQty((kg / KG_PER_LB * 10).roundToInt() / 10.0)} lb" else "${fmtQty((kg * 10).roundToInt() / 10.0)} kg"
 
 private fun saveHeightUs(feet: String, inches: String, onValid: (Double) -> Unit) {
     val f = feet.toIntOrNull() ?: return
