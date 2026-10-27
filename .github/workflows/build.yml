@@ -31,12 +31,26 @@ jobs:
           restore-keys: usda-
 
       - name: Build offline food database
-        run: python3 tools/build_food_db.py --out app/src/main/assets/usda.db --cache tools/cache
+        id: db
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 tools/build_food_db.py --out app/src/main/assets/usda.db --cache tools/cache 2>&1 | tee db.log
 
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build release APK
-        run: ./gradlew --no-daemon assembleRelease
+        id: gradle
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon assembleRelease 2>&1 | tee gradle.log
+
+      - name: Report errors
+        if: steps.db.outcome == 'failure' || steps.gradle.outcome == 'failure'
+        run: |
+          python3 tools/ci_report.py db.log gradle.log
+          exit 1
 
       - name: Rename APK
         run: |
