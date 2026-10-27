@@ -218,7 +218,7 @@ class IngredientMatcher(private val usda: FoodCandidateSource) {
         "cream", "dried", "dehydrated", "canned", "frozen", "cooked", "boiled", "baked", "roasted", "stewed",
         "braised", "grilled", "steamed", "candied", "sweetened", "sticks",
     )
-    private val countWords = Regex("medium|whole|large|each|\\b(egg|clove|slice|fruit)\\b")
+    private val countPreference = listOf("medium", "whole", "each", "fruit", "egg", "clove", "slice", "large", "small")
 
     fun match(ing: MealieIngredient): IngredientMatch {
         val parsed = IngredientParser.parse(ing.text, ing.quantity, ing.unit, ing.food)
@@ -391,9 +391,13 @@ class IngredientMatcher(private val usda: FoodCandidateSource) {
             val lu = labelUnit(portion.label)
             if (unit != null && (lu.unit == unit || lu.rest.contains(unit))) return Portion(portion.label, portion.grams / lu.amount) to false
         }
-        for (portion in r.portions) {
-            val lu = labelUnit(portion.label)
-            if (!isMassOrVolume(lu.unit) && countWords.containsMatchIn(lu.rest)) return Portion(portion.label, portion.grams / lu.amount) to false
+        // A bare count ("2 zucchini") means a medium one when the data has sizes.
+        for (pref in countPreference) {
+            val word = Regex("\\b$pref\\b")
+            for (portion in r.portions) {
+                val lu = labelUnit(portion.label)
+                if (!isMassOrVolume(lu.unit) && word.containsMatchIn(lu.rest)) return Portion(portion.label, portion.grams / lu.amount) to false
+            }
         }
         for (portion in r.portions) {
             val lu = labelUnit(portion.label)
