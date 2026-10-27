@@ -251,7 +251,7 @@ def build(sources, out_path):
             if not grams or grams <= 0:
                 continue
             label = portion_label(r, units)
-            if not label:
+            if not label or label.lower().startswith("guideline amount"):
                 continue
             portions.setdefault(fid, []).append((num(r.get("seq_num")) or 0, label, grams))
 
