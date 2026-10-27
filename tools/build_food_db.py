@@ -181,6 +181,7 @@ def build(sources, out_path):
     nutrients = {}   # fdc_id -> {nutrient_id: amount}
     portions = {}    # fdc_id -> [(label, grams)]
     unit_of = {}     # nutrient id -> unit name
+    by_number = {}   # legacy nutrient number (e.g. 208) -> FDC nutrient id (e.g. 1008)
 
     for key, src, data_type, code in sources:
         log(f"reading {key}")
@@ -188,6 +189,11 @@ def build(sources, out_path):
             nid = int(num(r.get("id")) or 0)
             if nid:
                 unit_of[nid] = (r.get("unit_name") or "").strip().upper()
+                nbr = num(r.get("nutrient_nbr"))
+                if nbr:
+                    prev = by_number.get(int(nbr))
+                    if prev is None or (prev not in TRACKED and nid in TRACKED):
+                        by_number[int(nbr)] = nid
 
         cats = {}
         for r in src.rows("food_category.csv"):
@@ -220,6 +226,9 @@ def build(sources, out_path):
             if fid not in kept:
                 continue
             nid = int(num(r.get("nutrient_id")) or 0)
+            if 0 < nid < 1000:
+                # FNDDS lists legacy nutrient numbers (208 = energy) instead of FDC ids.
+                nid = by_number.get(nid, nid)
             if nid not in wanted:
                 continue
             amt = num(r.get("amount"))
