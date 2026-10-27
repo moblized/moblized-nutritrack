@@ -79,7 +79,7 @@ object OpenFoodFacts {
                 "?fields=product_name,product_name_en,brands,nutriments,serving_size,serving_quantity",
         )
         val conn = url.openConnection() as HttpURLConnection
-        conn.setRequestProperty("User-Agent", "NutriTrack/1.0 (Android; github.com/moblized/nutritrack)")
+        conn.setRequestProperty("User-Agent", "NutriTrack/1.0 (Android; github.com/moblized/moblized-nutritrack)")
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         try {
