@@ -121,6 +121,25 @@ class Source:
             yield from csv.DictReader(fh)
 
 
+def diagnose(src, kept):
+    """Print what a dataset looks like when no nutrient values could be matched."""
+    names = src.zip.namelist() if src.zip else []
+    log(f"  DIAG files: {names[:60]}")
+    log(f"  DIAG kept ids sample: {sorted(kept)[:5]}")
+    for name in ("food_nutrient.csv", "food.csv", "nutrient.csv"):
+        log(f"  DIAG {name}:")
+        for i, r in enumerate(src.rows(name) or []):
+            log(f"    {dict(r)}")
+            if i >= 2:
+                break
+    ids = {}
+    for i, r in enumerate(src.rows("food_nutrient.csv") or []):
+        ids[r.get("nutrient_id")] = ids.get(r.get("nutrient_id"), 0) + 1
+        if i > 200000:
+            break
+    log(f"  DIAG nutrient_id counts: {sorted(ids.items(), key=lambda kv: -kv[1])[:40]}")
+
+
 def num(v):
     try:
         x = float(v)
@@ -209,6 +228,8 @@ def build(sources, out_path):
             nutrients.setdefault(fid, {})[nid] = amt
             n_rows += 1
         log(f"  {n_rows} nutrient values")
+        if n_rows == 0:
+            diagnose(src, kept)
 
         units = {}
         for r in src.rows("measure_unit.csv"):
