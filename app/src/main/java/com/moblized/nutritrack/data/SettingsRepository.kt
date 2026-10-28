@@ -61,6 +61,12 @@ data class Settings(
     val lastWeighInSource: String = "",
     val mealieUrl: String = "",
     val mealieToken: String = "",
+    /** Show "running low" warnings in the app. */
+    val lowWarnings: Boolean = true,
+    /** Send an evening notification when something is low. */
+    val lowNotify: Boolean = false,
+    /** Time of the evening check, in minutes after midnight. */
+    val lowNotifyMinutes: Int = 19 * 60 + 30,
 ) {
     val mealieConfigured: Boolean get() = mealieUrl.isNotBlank() && mealieToken.isNotBlank()
 }
@@ -90,6 +96,9 @@ class SettingsRepository(private val context: Context) {
         val weighInSource = stringPreferencesKey("weigh_in_source")
         val mealieUrl = stringPreferencesKey("mealie_url")
         val mealieToken = stringPreferencesKey("mealie_token")
+        val lowWarnings = booleanPreferencesKey("low_warnings")
+        val lowNotify = booleanPreferencesKey("low_notify")
+        val lowNotifyMinutes = intPreferencesKey("low_notify_minutes")
     }
 
     val flow: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -125,6 +134,9 @@ class SettingsRepository(private val context: Context) {
             lastWeighInSource = this[K.weighInSource] ?: "",
             mealieUrl = this[K.mealieUrl] ?: "",
             mealieToken = this[K.mealieToken] ?: "",
+            lowWarnings = this[K.lowWarnings] ?: d.lowWarnings,
+            lowNotify = this[K.lowNotify] ?: d.lowNotify,
+            lowNotifyMinutes = this[K.lowNotifyMinutes] ?: d.lowNotifyMinutes,
         )
     }
 
@@ -152,6 +164,10 @@ class SettingsRepository(private val context: Context) {
         it[K.weighInTime] = time
         it[K.weighInSource] = source
     }
+
+    suspend fun setLowWarnings(on: Boolean) = context.dataStore.edit { it[K.lowWarnings] = on }
+    suspend fun setLowNotify(on: Boolean) = context.dataStore.edit { it[K.lowNotify] = on }
+    suspend fun setLowNotifyMinutes(minutes: Int) = context.dataStore.edit { it[K.lowNotifyMinutes] = minutes }
 
     suspend fun setMealie(url: String, token: String) = context.dataStore.edit {
         it[K.mealieUrl] = url.trim().trimEnd('/')

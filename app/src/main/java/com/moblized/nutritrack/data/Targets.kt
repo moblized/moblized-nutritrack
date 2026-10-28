@@ -17,6 +17,9 @@ object Targets {
     fun autoCalories(p: Profile): Int =
         ((bmr(p) * p.activity.factor + p.goal.kcalDelta) / 10.0).roundToInt() * 10
 
+    /** Below this many kcal a day it's hard to meet nutrient needs without medical supervision. */
+    fun calorieFloor(p: Profile): Int = if (p.sex == Sex.MALE) 1500 else 1200
+
     fun calories(s: Settings): Double = (s.calorieOverride ?: autoCalories(s.profile)).toDouble()
 
     /** Default targets before user overrides. */

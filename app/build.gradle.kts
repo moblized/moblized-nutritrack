@@ -89,6 +89,7 @@ dependencies {
     implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")

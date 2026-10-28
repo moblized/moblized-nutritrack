@@ -28,6 +28,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.moblized.nutritrack.MainActivity
 import com.moblized.nutritrack.data.Graph
+import com.moblized.nutritrack.data.LowNutrients
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.Nutrients
 import com.moblized.nutritrack.data.TargetKind
@@ -46,6 +47,8 @@ private data class WidgetData(
     val carbs: Double,
     val fat: Double,
     val low: List<Pair<String, Int>>,
+    /** True once the day is mostly over and something is under half its target. */
+    val warn: Boolean,
 )
 
 class TodayWidget : GlanceAppWidget() {
@@ -83,6 +86,8 @@ class TodayWidget : GlanceAppWidget() {
             carbs = totals[Nutrients.CARBS] ?: 0.0,
             fat = totals[Nutrients.FAT] ?: 0.0,
             low = low,
+            warn = LowNutrients.dayIsJudged(LocalDate.now(), java.time.LocalDateTime.now()) &&
+                low.any { it.second < (LowNutrients.DAY_THRESHOLD * 100).toInt() },
         )
     }
 }
@@ -124,7 +129,7 @@ private fun Content(d: WidgetData) {
         if (d.low.isNotEmpty()) {
             Spacer(GlanceModifier.height(6.dp))
             Text(
-                "🎯 Low: " + d.low.joinToString("  ·  ") { "${it.first} ${it.second}%" },
+                (if (d.warn) "⚠️ Low: " else "Lowest so far: ") + d.low.joinToString("  ·  ") { "${it.first} ${it.second}%" },
                 style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp),
                 maxLines = 1,
             )

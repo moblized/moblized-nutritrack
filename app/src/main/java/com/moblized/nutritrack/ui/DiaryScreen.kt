@@ -60,6 +60,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moblized.nutritrack.data.DiaryEntry
 import com.moblized.nutritrack.data.FoodSource
 import com.moblized.nutritrack.data.Graph
+import com.moblized.nutritrack.data.LowNutrients
+import com.moblized.nutritrack.data.LowWarnings
 import com.moblized.nutritrack.data.Meals
 import com.moblized.nutritrack.data.MealieException
 import com.moblized.nutritrack.data.MealiePlanEntry
@@ -76,8 +78,10 @@ import com.moblized.nutritrack.ui.theme.foodTileColor
 import com.moblized.nutritrack.ui.theme.mealColor
 import com.moblized.nutritrack.ui.theme.streakColors
 import com.moblized.nutritrack.ui.theme.trackColor
+import com.moblized.nutritrack.ui.theme.warningColors
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 
@@ -99,6 +103,8 @@ fun DiaryScreen(
     val dates by remember { Graph.app.db.diary().observeLoggedDates() }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val streak = remember(dates) { Progress.streak(dates, LocalDate.now()) }
+    val recent by remember(date) { Graph.app.db.diary().observeRange(date.minusDays(30).toString(), date.toString()) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Today's Mealie meal plan, when a Mealie server is connected.
     var plan by remember(date) { mutableStateOf<List<MealiePlanEntry>>(emptyList()) }
@@ -138,6 +144,8 @@ fun DiaryScreen(
             greeting = if (date == LocalDate.now()) greeting(LocalTime.now().hour) else null,
             settings = settings,
             entries = entries,
+            recentEntries = recent,
+            now = LocalDateTime.now(),
             streak = streak,
             plan = plan,
             planError = planError,
@@ -168,6 +176,8 @@ fun DiaryContent(
     greeting: String?,
     settings: Settings,
     entries: List<DiaryEntry>,
+    recentEntries: List<DiaryEntry>,
+    now: LocalDateTime,
     streak: Int,
     plan: List<MealiePlanEntry>,
     planError: String?,
@@ -182,6 +192,9 @@ fun DiaryContent(
 ) {
     val totals = remember(entries) { sumNutrients(entries.map { NutrientCodec.decode(it.nutrients) }) }
     val targets = remember(settings) { Targets.compute(settings) }
+    val warnings = remember(entries, recentEntries, settings, date, now.hour) {
+        if (settings.lowWarnings) LowNutrients.warnings(date, now, entries, recentEntries, targets) else null
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -221,15 +234,18 @@ fun DiaryContent(
                 }
             }
             item { SummaryCard(totals, targets, streak) }
+            if (warnings != null && !warnings.isEmpty) {
+                item(key = "low") { LowWarningCard(warnings, onSuggest) }
+            }
             if (plan.isNotEmpty() || planError != null) {
                 item { MealPlanCard(plan, planError, onOpenMealPlan) }
             }
-            if (entries.isNotEmpty()) {
+            if (entries.isNotEmpty() && (warnings == null || warnings.isEmpty)) {
                 boostTarget(totals, targets)?.let { (id, percent) ->
                     item(key = "boost") { BoostCard(id, percent, onSuggest) }
                 }
             }
-            item { HighlightsCard(totals, targets, onShowNutrients) }
+            item { HighlightsCard(totals, targets, warnings?.today?.map { it.id }?.toSet().orEmpty(), onShowNutrients) }
             Meals.names.indices.forEach { meal ->
                 item(key = "meal-$meal") {
                     MealCard(
@@ -371,6 +387,68 @@ private fun boostTarget(totals: Map<Int, Double>, targets: Map<Int, Double>): Pa
         .filter { it.second < 60 }
         .minByOrNull { it.second }
 
+/** "Running low" heads-up: what's low today (in the evening) and over the past week, with foods that help. */
+@Composable
+private fun LowWarningCard(w: LowWarnings, onSuggest: (String) -> Unit) {
+    val colors = warningColors()
+    val tipFor = w.all.firstOrNull { Emoji.boosters(it.id).isNotEmpty() }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = colors.container, contentColor = colors.content),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("⚠️", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Running low", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when {
+                            w.today.isNotEmpty() && w.week.isNotEmpty() -> "Under half your target today, or low all week"
+                            w.today.isNotEmpty() -> "Under half your target with the day almost done"
+                            else -> "Averaging under 70% over your last ${w.weekDays} logged days"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            w.all.take(6).forEach { low ->
+                val todayLow = w.today.any { it.id == low.id }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = Emoji.boosters(low.id).isNotEmpty()) { onSuggest(Emoji.boosters(low.id).first().second) }
+                        .padding(vertical = 5.dp),
+                ) {
+                    Text(Emoji.nutrient(low.id), modifier = Modifier.width(30.dp))
+                    Text(low.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(
+                        if (todayLow) "${low.percent}% today" else "${low.percent}% avg this week",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.accent,
+                    )
+                }
+            }
+            if (w.all.size > 6) {
+                Text("+ ${w.all.size - 6} more on the Nutrients tab", style = MaterialTheme.typography.bodySmall)
+            }
+            if (tipFor != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Foods rich in ${tipFor.name}:", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Emoji.boosters(tipFor.id).forEach { (emoji, food) ->
+                        AssistChip(onClick = { onSuggest(food) }, label = { Text("$emoji $food") })
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BoostCard(id: Int, percent: Int, onSuggest: (String) -> Unit) {
     val def = Nutrients.byId[id] ?: return
@@ -446,7 +524,7 @@ private fun MealPlanCard(plan: List<MealiePlanEntry>, error: String?, onOpen: (M
 }
 
 @Composable
-private fun HighlightsCard(totals: Map<Int, Double>, targets: Map<Int, Double>, onShowAll: () -> Unit) {
+private fun HighlightsCard(totals: Map<Int, Double>, targets: Map<Int, Double>, lowIds: Set<Int>, onShowAll: () -> Unit) {
     val met = Nutrients.highlights.count { id -> targets[id]?.let { t -> t > 0 && (totals[id] ?: 0.0) >= t } == true }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -462,7 +540,7 @@ private fun HighlightsCard(totals: Map<Int, Double>, targets: Map<Int, Double>, 
                 TextButton(onClick = onShowAll) { Text("All ${Nutrients.all.size}") }
             }
             Nutrients.highlights.mapNotNull { Nutrients.byId[it] }.forEach { def ->
-                NutrientRow(def, totals[def.id] ?: 0.0, targets[def.id], null)
+                NutrientRow(def, totals[def.id] ?: 0.0, targets[def.id], null, low = def.id in lowIds)
             }
         }
     }

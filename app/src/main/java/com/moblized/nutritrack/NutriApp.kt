@@ -8,5 +8,6 @@ class NutriApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Graph.app = AppGraph(this)
+        Graph.app.syncAlerts(replace = false)
     }
 }

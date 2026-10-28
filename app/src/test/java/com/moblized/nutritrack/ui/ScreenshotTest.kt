@@ -102,8 +102,16 @@ class ScreenshotTest {
     }
 
     @Composable
-    private fun diary(entries: List<DiaryEntry>, s: Settings, streak: Int, withPlan: Boolean) = DiaryContent(
-        date = LocalDate.now(), greeting = greeting(8), settings = s, entries = entries, streak = streak,
+    private fun diary(
+        entries: List<DiaryEntry>,
+        s: Settings,
+        streak: Int,
+        withPlan: Boolean,
+        hour: Int = 8,
+        recent: List<DiaryEntry> = emptyList(),
+    ) = DiaryContent(
+        date = LocalDate.now(), greeting = greeting(hour), settings = s, entries = entries,
+        recentEntries = recent, now = LocalDate.now().atTime(hour, 0), streak = streak,
         plan = if (withPlan) plan else emptyList(), planError = null,
         onDateChange = {}, onAdd = {}, onOpenEntry = {}, onShowNutrients = {}, onSetupProfile = {},
         onOpenMealPlan = {}, onSuggest = {},
@@ -113,6 +121,16 @@ class ScreenshotTest {
     fun diaryLight() {
         val day = sampleDay()
         shoot("1_diary_light") { diary(day, settings, streak = 6, withPlan = true) }
+    }
+
+    /** Evening view with a low day and a low week, so the "Running low" card shows. */
+    @Test
+    fun diaryEveningWarnings() {
+        val day = sampleDay().filter { it.meal != 3 }
+        val week = (1L..4L).flatMap { back ->
+            day.map { it.copy(id = it.id + back * 100, date = LocalDate.now().minusDays(back).toString()) }
+        }
+        shoot("7_diary_evening_warnings") { diary(day, settings, streak = 5, withPlan = false, hour = 19, recent = week) }
     }
 
     @Test

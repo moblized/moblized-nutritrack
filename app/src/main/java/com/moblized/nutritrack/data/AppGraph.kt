@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import androidx.room.Room
 import androidx.room.withTransaction
+import com.moblized.nutritrack.alerts.LowNutrientAlerts
 import com.moblized.nutritrack.widget.TodayWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -161,6 +162,18 @@ class AppGraph(private val context: Context) {
     suspend fun mealie(): MealieClient? {
         val s = settings.current()
         return if (s.mealieConfigured) MealieClient(s.mealieUrl, s.mealieToken) else null
+    }
+
+    /** Makes sure the evening low-nutrient check is scheduled (or cancelled) to match the settings. */
+    fun syncAlerts(replace: Boolean) {
+        scope.launch {
+            val s = settings.current()
+            if (s.lowNotify) {
+                LowNutrientAlerts.schedule(context, s.lowNotifyMinutes, replace)
+            } else {
+                LowNutrientAlerts.cancel(context)
+            }
+        }
     }
 
     fun refreshWidget() {

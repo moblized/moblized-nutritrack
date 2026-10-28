@@ -53,6 +53,7 @@ import com.moblized.nutritrack.data.Portion
 import com.moblized.nutritrack.data.TargetKind
 import com.moblized.nutritrack.ui.theme.color
 import com.moblized.nutritrack.ui.theme.trackColor
+import com.moblized.nutritrack.ui.theme.warningColors
 
 /** Animated calorie ring with a gradient arc and a mood emoji. */
 @Composable
@@ -151,6 +152,8 @@ fun NutrientRow(
     target: Double?,
     upperLimit: Double?,
     modifier: Modifier = Modifier,
+    low: Boolean = false,
+    lowLabel: String = "Running low",
 ) {
     val percent = pct(value, target)
     val overLimit = def.kind == TargetKind.LIMIT && target != null && value > target
@@ -213,6 +216,13 @@ fun NutrientRow(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 2.dp, start = 28.dp),
             )
+        } else if (low) {
+            Text(
+                "⚠️ $lowLabel",
+                style = MaterialTheme.typography.labelMedium,
+                color = warningColors().accent,
+                modifier = Modifier.padding(top = 2.dp, start = 28.dp),
+            )
         }
     }
 }
@@ -225,6 +235,8 @@ fun NutrientBreakdown(
     upperLimits: Map<Int, Double>,
     modifier: Modifier = Modifier,
     hideEmptyInfo: Boolean = true,
+    lowIds: Set<Int> = emptySet(),
+    lowLabel: String = "Running low",
 ) {
     Column(modifier) {
         NutrientGroup.entries.forEach { group ->
@@ -233,7 +245,10 @@ fun NutrientBreakdown(
             if (defs.isNotEmpty()) {
                 GroupHeader(group)
                 defs.forEach { def ->
-                    NutrientRow(def, totals[def.id] ?: 0.0, targets[def.id], upperLimits[def.id])
+                    NutrientRow(
+                        def, totals[def.id] ?: 0.0, targets[def.id], upperLimits[def.id],
+                        low = def.id in lowIds, lowLabel = lowLabel,
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
             }

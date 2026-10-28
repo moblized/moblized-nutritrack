@@ -176,6 +176,18 @@ fun mealColor(meal: Int): Color {
 fun streakColors(): Pair<Color, Color> =
     if (isAppDark()) Color(0xFF4A2A10) to Color(0xFFFFD2A6) else Color(0xFFFFE3C2) to Color(0xFF7A3B00)
 
+/** Amber "heads up" colors for low-nutrient warnings: container, content, accent. */
+data class WarningColors(val container: Color, val content: Color, val accent: Color)
+
+@Composable
+@ReadOnlyComposable
+fun warningColors(): WarningColors =
+    if (isAppDark()) {
+        WarningColors(Color(0xFF3B2A0C), Color(0xFFFFDDA6), Color(0xFFFFB74D))
+    } else {
+        WarningColors(Color(0xFFFFF0D2), Color(0xFF5A3A00), Color(0xFFC77700))
+    }
+
 /** Track behind progress bars and the calorie ring, visible on cards and backgrounds alike. */
 @Composable
 @ReadOnlyComposable

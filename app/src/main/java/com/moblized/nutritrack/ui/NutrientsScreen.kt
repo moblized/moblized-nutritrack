@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moblized.nutritrack.data.Graph
+import com.moblized.nutritrack.data.LowNutrients
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.Nutrients
 import com.moblized.nutritrack.data.Settings
@@ -34,6 +35,8 @@ import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.data.sumNutrients
 import java.time.LocalDate
+import java.time.LocalDateTime
+import com.moblized.nutritrack.ui.theme.warningColors
 
 private enum class Range(val label: String, val days: Long) { DAY("Day", 1), WEEK("7-day avg", 7), MONTH("30-day avg", 30) }
 
@@ -53,6 +56,18 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
     }
     val targets = remember(settings) { Targets.compute(settings) }
     val uls = remember(settings) { Targets.upperLimits(settings) }
+
+    // Low markers: a day once it's mostly over; averages over at least 3 logged days.
+    val lowIds = remember(totals, targets, range, date, loggedDays, settings.lowWarnings) {
+        when {
+            !settings.lowWarnings || entries.isEmpty() -> emptySet()
+            range == Range.DAY && LowNutrients.dayIsJudged(date, LocalDateTime.now()) ->
+                LowNutrients.below(totals, targets, LowNutrients.DAY_THRESHOLD).map { it.id }.toSet()
+            range != Range.DAY && loggedDays >= LowNutrients.MIN_WEEK_DAYS ->
+                LowNutrients.below(totals, targets, LowNutrients.WEEK_THRESHOLD).map { it.id }.toSet()
+            else -> emptySet()
+        }
+    }
 
     val goalDefs = Nutrients.all.filter { it.kind == TargetKind.GOAL && targets[it.id] != null }
     val met = goalDefs.count { (totals[it.id] ?: 0.0) >= (targets[it.id] ?: Double.MAX_VALUE) }
@@ -83,11 +98,15 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
                         range == Range.DAY -> "${fmtKcal(totals[Nutrients.ENERGY] ?: 0.0)} kcal from ${entries.size} foods"
                         else -> "Averaged over $loggedDays logged ${if (loggedDays == 1) "day" else "days"}"
                     },
+                    lowCount = lowIds.size,
                 )
                 Spacer(Modifier.height(8.dp))
             }
             item {
-                NutrientBreakdown(totals = totals, targets = targets, upperLimits = uls, hideEmptyInfo = false)
+                NutrientBreakdown(
+                    totals = totals, targets = targets, upperLimits = uls, hideEmptyInfo = false,
+                    lowIds = lowIds, lowLabel = if (range == Range.DAY) "Running low" else "Low on average",
+                )
             }
             item {
                 Text(
@@ -104,7 +123,7 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
 
 /** How many nutrient goals are met, shown as a little plant that grows into a trophy. */
 @Composable
-fun TargetsMetCard(met: Int, total: Int, subtitle: String) {
+fun TargetsMetCard(met: Int, total: Int, subtitle: String, lowCount: Int = 0) {
     val frac = if (total > 0) met.toFloat() / total else 0f
     val badge = when {
         frac >= 0.75f -> "🏆"
@@ -119,6 +138,13 @@ fun TargetsMetCard(met: Int, total: Int, subtitle: String) {
             Column(Modifier.weight(1f)) {
                 Text("$met of $total goals hit", style = MaterialTheme.typography.titleMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (lowCount > 0) {
+                    Text(
+                        "⚠️ $lowCount running low",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = warningColors().accent,
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 ProgressBar(frac, MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth())
             }

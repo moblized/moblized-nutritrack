@@ -1,6 +1,9 @@
 package com.moblized.nutritrack.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.Manifest
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +35,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,10 +47,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
+import com.moblized.nutritrack.alerts.LowNutrientAlerts
 import com.moblized.nutritrack.data.Activity
 import com.moblized.nutritrack.data.Goal
 import com.moblized.nutritrack.data.MealieClient
@@ -56,6 +64,7 @@ import com.moblized.nutritrack.data.Sex
 import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.ThemeMode
 import com.moblized.nutritrack.data.Units
+import com.moblized.nutritrack.ui.theme.warningColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -92,6 +101,15 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
 
     var hcAvailable by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { hcAvailable = Graph.app.health.isAvailable() }
+    val context = LocalContext.current
+    var pickingTime by remember { mutableStateOf(false) }
+    val notifyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        scope.launch {
+            repo.setLowNotify(granted)
+            Graph.app.syncAlerts(replace = true)
+            if (!granted) snackbar.showSnackbar("Notifications are off for NutriTrack, so the evening heads-up can't be shown")
+        }
+    }
     val weightLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
         scope.launch {
             val ok = granted.containsAll(Graph.app.health.weightPermissions)
@@ -206,6 +224,15 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (Targets.calories(settings) < Targets.calorieFloor(p)) {
+                            Text(
+                                "⚠️ That's a very low target. Under ${fmtKcal(Targets.calorieFloor(p).toDouble())} kcal a day it's " +
+                                    "hard to get enough nutrients, so it's worth checking with a doctor or dietitian.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = warningColors().accent,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -278,6 +305,43 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 Text("Units", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(4.dp))
                 ChoiceRow(Units.entries.toList(), settings.units, { it.label }, { u -> scope.launch { repo.setUnits(u) } })
+            }
+
+            item { Section("⚠️ Low nutrient warnings") }
+            item {
+                SwitchLine(
+                    title = "Warn me when something is low",
+                    subtitle = "From 5 pm, flags key nutrients under half their target for the day, " +
+                        "and anything averaging under 70% over your last week of logging",
+                    checked = settings.lowWarnings,
+                ) { on -> scope.launch { repo.setLowWarnings(on) } }
+            }
+            item {
+                SwitchLine(
+                    title = "Evening notification",
+                    subtitle = "A heads-up on your phone if something is still low, with foods that help",
+                    checked = settings.lowNotify,
+                ) { on ->
+                    if (on && Build.VERSION.SDK_INT >= 33 && !LowNutrientAlerts.canNotify(context)) {
+                        notifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        scope.launch {
+                            repo.setLowNotify(on)
+                            Graph.app.syncAlerts(replace = true)
+                        }
+                    }
+                }
+                if (settings.lowNotify) {
+                    TextButton(onClick = { pickingTime = true }) {
+                        Text("🕢 Check at ${fmtTime(settings.lowNotifyMinutes)}")
+                    }
+                }
+                Text(
+                    "Iodine, biotin and a few others are left out because USDA data is missing them for many foods, " +
+                        "so they'd look low even when they aren't.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             item { Section("❤️ Health Connect") }
@@ -428,7 +492,38 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
             }
         }
     }
+
+    if (pickingTime) {
+        ReminderTimeDialog(
+            minutes = settings.lowNotifyMinutes,
+            onDismiss = { pickingTime = false },
+            onPick = { m ->
+                pickingTime = false
+                scope.launch {
+                    repo.setLowNotifyMinutes(m)
+                    Graph.app.syncAlerts(replace = true)
+                    snackbar.showSnackbar("We'll check at ${fmtTime(m)} each evening")
+                }
+            },
+        )
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderTimeDialog(minutes: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    val state = rememberTimePickerState(initialHour = minutes / 60, initialMinute = minutes % 60, is24Hour = false)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Evening check time") },
+        text = { TimePicker(state = state) },
+        confirmButton = { TextButton(onClick = { onPick(state.hour * 60 + state.minute) }) { Text("OK") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+private fun fmtTime(minutes: Int): String =
+    java.time.LocalTime.of(minutes / 60, minutes % 60).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US))
 
 private fun fmtWeight(kg: Double, us: Boolean): String =
     if (us) "${fmtQty((kg / KG_PER_LB * 10).roundToInt() / 10.0)} lb" else "${fmtQty((kg * 10).roundToInt() / 10.0)} kg"
