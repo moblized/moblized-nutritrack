@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TipsAndUpdates
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -46,6 +47,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 private val tabs = listOf(
     Tab("diary", "Diary", Icons.Filled.Restaurant),
     Tab("nutrients", "Nutrients", Icons.Filled.BarChart),
+    Tab("eat", "What to eat", Icons.Filled.TipsAndUpdates),
     Tab("foods", "My foods", Icons.Filled.Kitchen),
     Tab("settings", "Settings", Icons.Filled.Settings),
 )
@@ -53,8 +55,12 @@ private val tabs = listOf(
 object Routes {
     fun add(date: LocalDate, meal: Int, query: String? = null) =
         "add/$date/$meal" + (query?.let { "?q=" + android.net.Uri.encode(it) } ?: "")
-    fun food(source: FoodSource, id: Long, date: LocalDate, meal: Int, entryId: Long = 0) =
-        "food/${source.key}/$id?date=$date&meal=$meal&entry=$entryId"
+    fun food(
+        source: FoodSource, id: Long, date: LocalDate, meal: Int, entryId: Long = 0,
+        unit: String? = null, unitGrams: Double? = null, qty: Double? = null,
+    ) = "food/${source.key}/$id?date=$date&meal=$meal&entry=$entryId" +
+        (if (unit != null) "&unit=" + android.net.Uri.encode(unit) + "&ug=${unitGrams ?: 1.0}&qty=${qty ?: 1.0}" else "")
+    fun eat(focus: Int? = null) = "eat" + (focus?.let { "?focus=$it" } ?: "")
     fun custom(id: Long, barcode: String? = null) =
         "custom/$id" + (barcode?.let { "?barcode=" + URLEncoder.encode(it, "UTF-8") } ?: "")
     fun recipe(id: Long) = "recipe/$id"
@@ -74,7 +80,7 @@ fun AppNav(settings: Settings) {
 
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
-    val showBar = tabs.any { it.route == route }
+    val showBar = tabs.any { it.route == route?.substringBefore("?") }
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -101,9 +107,26 @@ fun AppNav(settings: Settings) {
                                 }
                             }
                         },
+                        onWhatToEat = { focus -> nav.navigate(Routes.eat(focus)) },
                         onSuggest = { food ->
                             val meal = if (date == LocalDate.now()) Meals.forHour(java.time.LocalTime.now().hour) else 3
                             nav.navigate(Routes.add(date, meal, food))
+                        },
+                    )
+                }
+                composable(
+                    "eat?focus={focus}",
+                    arguments = listOf(navArgument("focus") { type = NavType.IntType; defaultValue = 0 }),
+                ) { entry ->
+                    WhatToEatScreen(
+                        date = date,
+                        onDateChange = setDate,
+                        settings = settings,
+                        initialFocus = entry.arguments?.getInt("focus")?.takeIf { it > 0 },
+                        onAdd = { c ->
+                            nav.navigate(
+                                Routes.food(c.source, c.id, date, suggestedMeal(date), unit = c.unitLabel, unitGrams = c.unitGrams, qty = c.quantity),
+                            )
                         },
                     )
                 }
@@ -151,13 +174,16 @@ fun AppNav(settings: Settings) {
                     )
                 }
                 composable(
-                    "food/{source}/{id}?date={date}&meal={meal}&entry={entry}",
+                    "food/{source}/{id}?date={date}&meal={meal}&entry={entry}&unit={unit}&ug={ug}&qty={qty}",
                     arguments = listOf(
                         navArgument("source") { type = NavType.StringType },
                         navArgument("id") { type = NavType.LongType },
                         navArgument("date") { type = NavType.StringType; defaultValue = "" },
                         navArgument("meal") { type = NavType.IntType; defaultValue = 0 },
                         navArgument("entry") { type = NavType.LongType; defaultValue = 0L },
+                        navArgument("unit") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("ug") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("qty") { type = NavType.StringType; defaultValue = "" },
                     ),
                 ) { entry ->
                     val args = entry.arguments
@@ -169,10 +195,19 @@ fun AppNav(settings: Settings) {
                         initialMeal = args?.getInt("meal") ?: 0,
                         entryId = args?.getLong("entry") ?: 0L,
                         settings = settings,
+                        presetUnit = args?.getString("unit")?.takeIf { it.isNotBlank() },
+                        presetUnitGrams = args?.getString("ug")?.toDoubleOrNull(),
+                        presetQty = args?.getString("qty")?.toDoubleOrNull(),
                         onBack = { nav.popBackStack() },
                         onSaved = {
-                            // Return to the diary after logging.
-                            if (!nav.popBackStack("diary", inclusive = false)) nav.popBackStack()
+                            val from = nav.previousBackStackEntry?.destination?.route.orEmpty()
+                            if (from.startsWith("eat")) {
+                                // Back to the suggestions, which update for what's still missing.
+                                nav.popBackStack()
+                            } else if (!nav.popBackStack("diary", inclusive = false)) {
+                                // Otherwise return to the diary after logging.
+                                nav.popBackStack()
+                            }
                         },
                         onEditFood = { source, id ->
                             when (source) {
@@ -248,16 +283,21 @@ fun AppNav(settings: Settings) {
             }
         }
         if (showBar) {
-            NavigationBar {
-                tabs.forEach { tab ->
-                    NavigationBarItem(
-                        selected = route == tab.route,
-                        onClick = { nav.switchTab(tab.route) },
-                        icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(tab.label) },
-                    )
-                }
-            }
+            AppBottomBar(route) { nav.switchTab(it) }
+        }
+    }
+}
+
+@Composable
+fun AppBottomBar(route: String?, onSelect: (String) -> Unit) {
+    NavigationBar {
+        tabs.forEach { tab ->
+            NavigationBarItem(
+                selected = route?.substringBefore("?") == tab.route,
+                onClick = { onSelect(tab.route) },
+                icon = { Icon(tab.icon, contentDescription = null) },
+                label = { Text(tab.label, maxLines = 1, softWrap = false) },
+            )
         }
     }
 }

@@ -138,6 +138,53 @@ class AppGraph(private val context: Context) {
         return health.upsert(entries)
     }
 
+    // ---------- what to eat ----------
+
+    @Volatile
+    private var pool: List<SuggestCandidate>? = null
+
+    /** Everyday foods to suggest, loaded once. */
+    suspend fun suggestionPool(): List<SuggestCandidate> = withContext(Dispatchers.IO) {
+        pool ?: usda.suggestionPool().also { pool = it }
+    }
+
+    /**
+     * The person's own foods: what they've logged in the last 30 days (in the amount they usually have),
+     * plus their recipes and saved foods.
+     */
+    suspend fun personalCandidates(today: LocalDate): List<SuggestCandidate> = withContext(Dispatchers.IO) {
+        val out = LinkedHashMap<String, SuggestCandidate>()
+        val recent = db.diary().range(today.minusDays(30).toString(), today.toString()).sortedByDescending { it.loggedAt }
+        for (e in recent) {
+            val key = "${e.source}:${e.refId}"
+            if (key in out || e.grams <= 0) continue
+            out[key] = SuggestCandidate(
+                source = FoodSource.of(e.source), id = e.refId, name = e.name, category = null,
+                group = FoodGroup.MINE, quantity = e.quantity, unitLabel = e.unitLabel, unitGrams = e.unitGrams,
+                nutrients = NutrientCodec.decode(e.nutrients),
+            )
+        }
+        for (r in db.recipes().all()) {
+            val key = "${FoodSource.RECIPE.key}:${r.id}"
+            if (key in out) continue
+            val f = recipeFood(r)
+            val serving = f.portions.firstOrNull() ?: continue
+            out[key] = SuggestCandidate(
+                FoodSource.RECIPE, r.id, r.name, null, FoodGroup.MINE, 1.0, serving.label, serving.grams,
+                f.per100g.scaled(serving.grams / 100.0),
+            )
+        }
+        for (cf in db.customFoods().all()) {
+            val key = "${FoodSource.CUSTOM.key}:${cf.id}"
+            if (key in out) continue
+            out[key] = SuggestCandidate(
+                FoodSource.CUSTOM, cf.id, cf.name, null, FoodGroup.MINE, 1.0, cf.servingLabel, cf.servingGrams,
+                NutrientCodec.decode(cf.per100).scaled(cf.servingGrams / 100.0),
+            )
+        }
+        out.values.toList()
+    }
+
     // ---------- smart scale (via Health Connect) ----------
 
     /** Copies the newest scale weigh-in from Health Connect into the profile. Returns it when applied. */

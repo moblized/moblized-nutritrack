@@ -72,6 +72,9 @@ fun FoodDetailScreen(
     initialMeal: Int,
     entryId: Long,
     settings: Settings,
+    presetUnit: String? = null,
+    presetUnitGrams: Double? = null,
+    presetQty: Double? = null,
     onBack: () -> Unit,
     onSaved: () -> Unit,
     onEditFood: (FoodSource, Long) -> Unit,
@@ -99,6 +102,10 @@ fun FoodDetailScreen(
                 ?: Portion(existing.unitLabel, existing.unitGrams)
             meal = existing.meal
             entryDate = LocalDate.parse(existing.date)
+        } else if (presetUnit != null) {
+            // Coming from "What to eat": start with the suggested portion.
+            unit = f.units.firstOrNull { it.label == presetUnit } ?: Portion(presetUnit, presetUnitGrams ?: 1.0)
+            qtyText = fmtQty(presetQty ?: 1.0)
         } else {
             qtyText = fmtQty(f.defaultQuantity())
             unit = f.defaultUnit()

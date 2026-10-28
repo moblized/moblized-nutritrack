@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -96,6 +97,7 @@ fun DiaryScreen(
     onSetupProfile: () -> Unit,
     onOpenMealPlan: (MealiePlanEntry) -> Unit,
     onSuggest: (String) -> Unit,
+    onWhatToEat: (Int?) -> Unit,
 ) {
     val loaded by remember(date) { Graph.app.db.diary().observeDay(date.toString()) }
         .collectAsStateWithLifecycle(initialValue = null)
@@ -157,6 +159,7 @@ fun DiaryScreen(
             onSetupProfile = onSetupProfile,
             onOpenMealPlan = onOpenMealPlan,
             onSuggest = onSuggest,
+            onWhatToEat = onWhatToEat,
         )
         Confetti(trigger = confetti)
     }
@@ -188,6 +191,7 @@ fun DiaryContent(
     onSetupProfile: () -> Unit,
     onOpenMealPlan: (MealiePlanEntry) -> Unit,
     onSuggest: (String) -> Unit,
+    onWhatToEat: (Int?) -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val totals = remember(entries) { sumNutrients(entries.map { NutrientCodec.decode(it.nutrients) }) }
@@ -235,14 +239,14 @@ fun DiaryContent(
             }
             item { SummaryCard(totals, targets, streak, LowNutrients.dayIsJudged(date, now)) }
             if (warnings != null && !warnings.isEmpty) {
-                item(key = "low") { LowWarningCard(warnings, onSuggest) }
+                item(key = "low") { LowWarningCard(warnings, onSuggest, onWhatToEat) }
             }
             if (plan.isNotEmpty() || planError != null) {
                 item { MealPlanCard(plan, planError, onOpenMealPlan) }
             }
             if (entries.isNotEmpty() && (warnings == null || warnings.isEmpty)) {
                 boostTarget(totals, targets)?.let { (id, percent) ->
-                    item(key = "boost") { BoostCard(id, percent, onSuggest) }
+                    item(key = "boost") { BoostCard(id, percent, onSuggest, onWhatToEat) }
                 }
             }
             item { HighlightsCard(totals, targets, warnings?.today?.map { it.id }?.toSet().orEmpty(), onShowNutrients) }
@@ -390,7 +394,7 @@ private fun boostTarget(totals: Map<Int, Double>, targets: Map<Int, Double>): Pa
 
 /** "Running low" heads-up: what's low today (in the evening) and over the past week, with foods that help. */
 @Composable
-private fun LowWarningCard(w: LowWarnings, onSuggest: (String) -> Unit) {
+private fun LowWarningCard(w: LowWarnings, onSuggest: (String) -> Unit, onWhatToEat: (Int?) -> Unit) {
     val colors = warningColors()
     val tipFor = w.all.firstOrNull { Emoji.boosters(it.id).isNotEmpty() }
     Card(
@@ -446,12 +450,16 @@ private fun LowWarningCard(w: LowWarnings, onSuggest: (String) -> Unit) {
                     }
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = { onWhatToEat(null) }, modifier = Modifier.fillMaxWidth()) {
+                Text("🍽️ Show me what to eat")
+            }
         }
     }
 }
 
 @Composable
-private fun BoostCard(id: Int, percent: Int, onSuggest: (String) -> Unit) {
+private fun BoostCard(id: Int, percent: Int, onSuggest: (String) -> Unit, onWhatToEat: (Int?) -> Unit) {
     val def = Nutrients.byId[id] ?: return
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -476,6 +484,7 @@ private fun BoostCard(id: Int, percent: Int, onSuggest: (String) -> Unit) {
                     AssistChip(onClick = { onSuggest(food) }, label = { Text("$emoji $food") })
                 }
             }
+            TextButton(onClick = { onWhatToEat(id) }) { Text("🍽️ More ideas for ${def.name}") }
         }
     }
 }

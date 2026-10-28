@@ -110,6 +110,9 @@ interface CustomFoodDao {
     @Query("SELECT * FROM custom_foods WHERE id = :id")
     suspend fun get(id: Long): CustomFood?
 
+    @Query("SELECT * FROM custom_foods")
+    suspend fun all(): List<CustomFood>
+
     @Query("SELECT * FROM custom_foods WHERE barcode = :code LIMIT 1")
     suspend fun byBarcode(code: String): CustomFood?
 
@@ -139,6 +142,9 @@ interface RecipeDao {
 
     @Query("SELECT * FROM recipes WHERE id = :id")
     suspend fun get(id: Long): Recipe?
+
+    @Query("SELECT * FROM recipes")
+    suspend fun all(): List<Recipe>
 
     @Query("SELECT * FROM recipes WHERE name LIKE :pattern ORDER BY name COLLATE NOCASE LIMIT 30")
     suspend fun search(pattern: String): List<Recipe>

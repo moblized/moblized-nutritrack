@@ -203,4 +203,45 @@ class ScreenshotTest {
             }
         }
     }
+
+    @Test
+    @Config(qualifiers = "w412dp-h2600dp-xhdpi")
+    fun whatToEat() {
+        val day = sampleDay().filter { it.meal != 3 }
+        val pool = com.moblized.nutritrack.data.TestFoods.pool()
+        val mine = sampleDay().filter { it.meal == 3 }.map {
+            com.moblized.nutritrack.data.SuggestCandidate(
+                FoodSource.USDA, it.refId, it.name, null, com.moblized.nutritrack.data.FoodGroup.MINE,
+                it.quantity, it.unitLabel, it.unitGrams, NutrientCodec.decode(it.nutrients),
+            )
+        }
+        shoot("8_what_to_eat") {
+            WhatToEatContent(
+                date = LocalDate.now(), onDateChange = {}, settings = settings, entries = day,
+                pool = pool, mine = mine, focus = null, onFocus = {}, onAdd = {},
+            )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h2000dp-xhdpi")
+    fun whatToEatFocused() {
+        val day = sampleDay().filter { it.meal != 3 }
+        val pool = com.moblized.nutritrack.data.TestFoods.pool()
+        shoot("9_what_to_eat_vitamin_d", dark = true) {
+            WhatToEatContent(
+                date = LocalDate.now(), onDateChange = {}, settings = settings, entries = day,
+                pool = pool, mine = emptyList(), focus = com.moblized.nutritrack.data.Nutrients.VIT_D,
+                onFocus = {}, onAdd = {},
+            )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h120dp-xhdpi")
+    fun bottomBar() {
+        shoot("10_bottom_bar") {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.Bottom) { AppBottomBar("eat") {} }
+        }
+    }
 }

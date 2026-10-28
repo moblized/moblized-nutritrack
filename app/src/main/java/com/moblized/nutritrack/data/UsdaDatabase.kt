@@ -91,6 +91,35 @@ class UsdaDatabase(private val context: Context) : FoodCandidateSource {
         return out
     }
 
+    /** Everyday foods with a typical portion for "What to eat" (built from USDA survey foods). */
+    fun suggestionPool(): List<SuggestCandidate> {
+        val out = ArrayList<SuggestCandidate>()
+        val keep = (Suggestions.goals + listOf(Nutrients.ENERGY, Nutrients.SODIUM, Nutrients.SAT_FAT, Nutrients.ADDED_SUGARS)).toSet()
+        runCatching {
+            open().rawQuery(
+                "SELECT s.id, f.description, f.category, s.label, s.grams, s.grp, f.nutrients FROM suggest s JOIN foods f ON f.id = s.id",
+                null,
+            ).use { c ->
+                while (c.moveToNext()) {
+                    val grams = c.getDouble(4)
+                    val per100 = NutrientCodec.decode(c.getString(6)).filterKeys { it in keep }
+                    out += SuggestCandidate(
+                        source = FoodSource.USDA,
+                        id = c.getLong(0),
+                        name = c.getString(1),
+                        category = c.getString(2),
+                        group = FoodGroup.of(c.getString(5)),
+                        quantity = 1.0,
+                        unitLabel = c.getString(3),
+                        unitGrams = grams,
+                        nutrients = per100.scaled(grams / 100.0),
+                    )
+                }
+            }
+        }
+        return out
+    }
+
     private fun parsePortions(json: String?): List<Portion> {
         val portions = ArrayList<Portion>()
         runCatching {

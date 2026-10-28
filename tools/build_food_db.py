@@ -13,6 +13,8 @@ import argparse
 import csv
 import io
 import json
+import math
+import re
 import os
 import sqlite3
 import sys
@@ -60,6 +62,76 @@ SPECIAL = {1110: (1 / 40.0, "UG")}  # vitamin D IU -> ug
 FALLBACKS.setdefault(1114, []).append(1110)
 
 UNIT_SCALE = {"G": 1.0, "MG": 1e-3, "UG": 1e-6}
+
+
+# Everyday single foods from the USDA survey database (FNDDS), grouped by food group.
+GROUPS = {
+    "veg": ["Broccoli", "Cabbage", "Carrots", "Corn", "Lettuce and lettuce salads", "Onions",
+            "Other dark green vegetables", "Other red and orange vegetables", "Other starchy vegetables",
+            "Other vegetables and combinations", "Spinach", "String beans", "Tomatoes",
+            "White potatoes, baked or boiled"],
+    "fruit": ["Apples", "Bananas", "Blueberries and other berries", "Citrus fruits", "Dried fruits", "Grapes",
+              "Mango and papaya", "Melons", "Other fruits and fruit salads", "Peaches and nectarines", "Pears",
+              "Pineapple", "Strawberries"],
+    "dairy": ["Cheese", "Cottage/ricotta cheese", "Milk, lowfat", "Milk, nonfat", "Milk, reduced fat", "Milk, whole",
+              "Yogurt, Greek", "Yogurt, regular", "Plant-based milk", "Plant-based yogurt"],
+    "protein": ["Beef, excludes ground", "Ground beef", "Chicken, whole pieces", "Turkey, duck, other poultry", "Pork",
+                "Fish", "Shellfish", "Eggs and omelets", "Soy and meat-alternative products"],
+    "legumes": ["Nuts and seeds", "Beans, peas, legumes"],
+    "grains": ["Oatmeal", "Grits and other cooked cereals", "Pasta, noodles, cooked grains", "Rice",
+               "Ready-to-eat cereal, lower sugar (=<21.2g/100g)", "Tortillas", "Yeast breads"],
+}
+GROUP_OF = {cat: g for g, cats in GROUPS.items() for cat in cats}
+
+EXCLUDE = re.compile(
+    r"\b(fried|breaded|battered|coated|fritter|tempura|sauce|gravy|creamed|candied|glazed|au gratin|"
+    r"scalloped|casserole|omelet|souffle|with cheese|with butter|with margarine|with oil|fat added|"
+    r"from fast food|from restaurant|sandwich|salad dressing|dip|chips|pie|pudding|syrup|sweetened|"
+    r"chocolate|frosted|honey|sugar|jelly|jam|baby|infant|toddler|formula|liver|organ|giblets|chitterlings|"
+    r"tripe|pickled|smoked|jerky|sausage|bacon|ham|salami|bologna|frankfurter|hot dog|ns as to|nfs|"
+    r"evaporated|condensed|spread|lard|imitation|reduced calorie|light)\b",
+    re.I)
+
+def portion_score(label):
+    l = label.lower()
+    if re.search(r"\b(lb|pound|package|recipe|yield|can|jar|bottle|box|loaf|bag|quart|gallon|pint|guideline)\b", l):
+        return -1
+    if re.search(r"\b(medium|large|small|fruit|egg|slice|breast|thigh|drumstick|fillet|steak|chop|patty|container|"
+                 r"stalk|spear|ear|whole|piece)\b", l):
+        sc = 3
+    elif re.search(r"\b(cup|oz)\b", l):
+        sc = 2
+    elif l == "typical serving":
+        sc = 1.5
+    else:
+        sc = 1
+    if re.search(r"\bmedium\b", l): sc += 0.5
+    if re.search(r"\bfl oz\b|tbsp|tsp|pureed|mashed", l): sc -= 1
+    if not re.match(r"\s*\d", l) and l != "typical serving": sc -= 1.5
+    return sc
+
+def choose_portion(portions, kcal100):
+    best = None
+    for label, grams in portions:
+        if not (15 <= grams <= 400):
+            continue
+        sc = portion_score(label)
+        if sc < 0:
+            continue
+        kcal = (kcal100 or 0) * grams / 100
+        if kcal > 280:
+            sc -= 1.5 * math.log(kcal / 280)
+        if best is None or sc > best[0]:
+            best = (sc, label, grams)
+    return (best[1], best[2]) if best else None
+
+
+def suggestion(description, category, source, kcal, portions):
+    """(portion label, grams, group) when this food belongs in the "What to eat" pool, else None."""
+    if source != 2 or category not in GROUP_OF or EXCLUDE.search(description):
+        return None
+    p = choose_portion(portions, kcal)
+    return (p[0], p[1], GROUP_OF[category]) if p else None
 
 
 def log(*a):
@@ -292,9 +364,11 @@ def build(sources, out_path):
         nutrients TEXT NOT NULL,
         portions TEXT NOT NULL)""")
     db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+    db.execute("CREATE TABLE suggest (id INTEGER PRIMARY KEY, label TEXT NOT NULL, grams REAL NOT NULL, grp TEXT NOT NULL)")
 
     written = 0
     with_energy = 0
+    pooled = 0
     for fid, f in foods.items():
         raw = nutrients.get(fid, {})
         out = {}
@@ -340,19 +414,25 @@ def build(sources, out_path):
             json.dumps(plist, separators=(",", ":")),
         ))
         written += 1
+        sug = suggestion(f["description"], f["category"], f["source"], kcal, plist)
+        if sug:
+            db.execute("INSERT INTO suggest VALUES (?,?,?,?)", (fid, sug[0], sug[1], sug[2]))
+            pooled += 1
 
     db.execute('CREATE VIRTUAL TABLE food_fts USING fts4(content="foods", description)')
     db.execute("INSERT INTO food_fts(food_fts) VALUES('rebuild')")
     db.execute("INSERT INTO meta VALUES ('built', ?)", (time.strftime("%Y-%m-%d"),))
     db.execute("INSERT INTO meta VALUES ('foods', ?)", (str(written),))
+    db.execute("INSERT INTO meta VALUES ('suggest', ?)", (str(pooled),))
     db.execute("PRAGMA user_version = 1")
     db.commit()
     db.execute("VACUUM")
     db.close()
 
+    log(f"suggestion pool: {pooled} foods")
     log(f"wrote {written} foods ({with_energy} with energy) -> {out_path} "
         f"({os.path.getsize(out_path) / 1e6:.1f} MB)")
-    return written, with_energy
+    return written, with_energy, pooled
 
 
 def main():
@@ -376,7 +456,9 @@ def main():
             download(BASE + zip_name, path)
         sources.append((key, Source(path), data_type, code))
 
-    written, with_energy = build(sources, args.out)
+    written, with_energy, pooled = build(sources, args.out)
+    if not args.local_dir and pooled < 400:
+        raise SystemExit(f"only {pooled} foods in the suggestion pool, expected at least 400")
     if written < args.min_foods:
         raise SystemExit(f"only {written} foods written, expected at least {args.min_foods}")
     if with_energy < written * 0.9:
