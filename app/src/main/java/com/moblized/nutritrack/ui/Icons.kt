@@ -57,8 +57,7 @@ object Emoji {
         add("🥬", "lettuce spinach kale cabbage chard collard arugula greens bok")
         add("🥒", "cucumber pickle zucchini squash")
         add("🍆", "eggplant")
-        add("🫛", "pea peas edamame")
-        add("🫘", "bean beans lentil lentils chickpea chickpeas hummus legume")
+        add("🫘", "bean beans lentil lentils chickpea chickpeas hummus legume pea peas edamame")
         add("🥜", "peanut")
         add("🌰", "almond walnut pecan cashew pistachio hazelnut nut nuts chestnut")
         add("🌻", "sunflower seed seeds flaxseed chia")
@@ -125,7 +124,7 @@ object Emoji {
     /** Two-word names that mean something different from their first word. */
     private val pairs: Map<String, String> = mapOf(
         "cream cheese" to "🧀", "ice cream" to "🍨", "hot dog" to "🌭", "sweet potato" to "🍠",
-        "peanut butter" to "🥜", "green bean" to "🫛", "french fry" to "🍟", "french fries" to "🍟",
+        "peanut butter" to "🥜", "green bean" to "🫘", "french fry" to "🍟", "french fries" to "🍟",
         "cherry tomato" to "🍅", "egg white" to "🥚", "corn dog" to "🌭", "orange juice" to "🧃",
         "apple juice" to "🧃", "coconut milk" to "🥥", "almond milk" to "🥛", "soy milk" to "🥛",
         "black pepper" to "🧂", "brussels sprout" to "🥬", "green onion" to "🧅",
@@ -207,7 +206,7 @@ object Emoji {
         N.CAFFEINE -> "☕"
         N.WATER -> "💧"
         N.CARBS -> "🍞"
-        N.FIBER -> "🫘"
+        N.FIBER -> "🌾"
         N.STARCH -> "🥔"
         N.SUGARS -> "🍬"
         N.ADDED_SUGARS -> "🧁"

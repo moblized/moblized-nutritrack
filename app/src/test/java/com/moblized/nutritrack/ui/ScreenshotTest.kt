@@ -34,7 +34,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
-import java.sql.DriverManager
 import java.time.LocalDate
 
 /** Renders the main screens with realistic data so the look can be checked without a phone. */
@@ -54,7 +53,8 @@ class ScreenshotTest {
     private fun per100(description: String): Map<Int, Double> {
         val db = listOf("src/main/assets/usda.db", "app/src/main/assets/usda.db").map(::File).firstOrNull { it.exists() }
         Assume.assumeTrue("usda.db has not been built", db != null)
-        DriverManager.getConnection("jdbc:sqlite:" + db!!.absolutePath).use { conn ->
+        // Robolectric's sandboxed class loader can hide JDBC drivers from DriverManager, so use the driver directly.
+        org.sqlite.JDBC().connect("jdbc:sqlite:" + db!!.absolutePath, java.util.Properties())!!.use { conn ->
             conn.prepareStatement("SELECT nutrients FROM foods WHERE description = ? LIMIT 1").use { st ->
                 st.setString(1, description)
                 st.executeQuery().use { rs ->

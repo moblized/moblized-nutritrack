@@ -52,11 +52,12 @@ import com.moblized.nutritrack.data.Nutrients
 import com.moblized.nutritrack.data.Portion
 import com.moblized.nutritrack.data.TargetKind
 import com.moblized.nutritrack.ui.theme.color
+import com.moblized.nutritrack.ui.theme.trackColor
 
 /** Animated calorie ring with a gradient arc and a mood emoji. */
 @Composable
 fun CalorieRing(eaten: Double, target: Double, modifier: Modifier = Modifier, size: Dp = 140.dp) {
-    val track = MaterialTheme.colorScheme.surfaceVariant
+    val track = trackColor()
     val over = eaten > target * 1.05 && target > 0
     val raw = if (target > 0) (eaten / target).toFloat() else 0f
     val frac by animateFloatAsState(raw.coerceIn(0f, 1f), tween(900, easing = FastOutSlowInEasing), label = "ring")
@@ -107,7 +108,7 @@ fun ProgressBar(fraction: Float, color: Color, modifier: Modifier = Modifier, he
         modifier
             .height(height)
             .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(trackColor()),
     ) {
         if (animated > 0.001f) {
             Box(

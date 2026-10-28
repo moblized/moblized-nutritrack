@@ -74,6 +74,8 @@ import com.moblized.nutritrack.data.sumNutrients
 import com.moblized.nutritrack.ui.theme.color
 import com.moblized.nutritrack.ui.theme.foodTileColor
 import com.moblized.nutritrack.ui.theme.mealColor
+import com.moblized.nutritrack.ui.theme.streakColors
+import com.moblized.nutritrack.ui.theme.trackColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -341,13 +343,14 @@ private fun StreakPill(streak: Int) {
         1 -> "🔥 1 day streak"
         else -> "🔥 $streak day streak"
     }
+    val (bg, fg) = streakColors()
     Text(
         text,
         style = MaterialTheme.typography.labelLarge,
-        color = if (streak > 0) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (streak > 0) fg else MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (streak > 0) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+            .background(if (streak > 0) bg else trackColor())
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }

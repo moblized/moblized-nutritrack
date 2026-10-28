@@ -35,19 +35,19 @@ private val Light = lightColorScheme(
     onTertiaryContainer = Color(0xFF001F28),
     error = Color(0xFFBA1A1A),
     errorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFFF6FAF6),
+    background = Color(0xFFEDF5EF),
     onBackground = Color(0xFF171D19),
-    surface = Color(0xFFF6FAF6),
+    surface = Color(0xFFEDF5EF),
     onSurface = Color(0xFF171D19),
-    surfaceVariant = Color(0xFFDBE5DD),
+    surfaceVariant = Color(0xFFDDE8E0),
     onSurfaceVariant = Color(0xFF404943),
     outline = Color(0xFF707973),
     outlineVariant = Color(0xFFBFC9C1),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF0F5F0),
-    surfaceContainer = Color(0xFFEAEFEA),
-    surfaceContainerHigh = Color(0xFFE4EAE4),
-    surfaceContainerHighest = Color(0xFFDFE4DF),
+    surfaceContainerLow = Color(0xFFF6FAF7),
+    surfaceContainer = Color(0xFFF3F8F4),
+    surfaceContainerHigh = Color(0xFFF9FCFA),
+    surfaceContainerHighest = Color(0xFFFFFFFF),
 )
 
 private val Dark = darkColorScheme(
@@ -74,10 +74,10 @@ private val Dark = darkColorScheme(
     outline = Color(0xFF8A938C),
     outlineVariant = Color(0xFF404943),
     surfaceContainerLowest = Color(0xFF0A0F0C),
-    surfaceContainerLow = Color(0xFF171D19),
-    surfaceContainer = Color(0xFF1B211D),
-    surfaceContainerHigh = Color(0xFF252B28),
-    surfaceContainerHighest = Color(0xFF303632),
+    surfaceContainerLow = Color(0xFF161D19),
+    surfaceContainer = Color(0xFF19211D),
+    surfaceContainerHigh = Color(0xFF1E2823),
+    surfaceContainerHighest = Color(0xFF212C26),
 )
 
 private fun ColorScheme.pureBlack(): ColorScheme = copy(
@@ -169,6 +169,17 @@ fun mealColor(meal: Int): Color {
         else -> if (dark) Color(0xFF4D2234) else Color(0xFFFFD8E4)
     }
 }
+
+/** Warm "on fire" colors for the logging streak pill: background to text. */
+@Composable
+@ReadOnlyComposable
+fun streakColors(): Pair<Color, Color> =
+    if (isAppDark()) Color(0xFF4A2A10) to Color(0xFFFFD2A6) else Color(0xFFFFE3C2) to Color(0xFF7A3B00)
+
+/** Track behind progress bars and the calorie ring, visible on cards and backgrounds alike. */
+@Composable
+@ReadOnlyComposable
+fun trackColor(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isAppDark()) 0.12f else 0.07f)
 
 /** Soft tile behind a food emoji, picked from the food's name so each food keeps its color. */
 @Composable
