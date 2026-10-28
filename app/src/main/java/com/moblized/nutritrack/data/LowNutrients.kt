@@ -2,6 +2,7 @@ package com.moblized.nutritrack.data
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
 /** A nutrient that is below its target: [percent] of the target reached. */
 data class LowNutrient(val id: Int, val percent: Int) {
@@ -51,7 +52,7 @@ object LowNutrients {
         watched.mapNotNull { id ->
             val t = targets[id]?.takeIf { it > 0 } ?: return@mapNotNull null
             val frac = (totals[id] ?: 0.0) / t
-            if (frac < threshold) LowNutrient(id, (frac * 100).toInt()) else null
+            if (frac < threshold) LowNutrient(id, (frac * 100).roundToInt()) else null
         }.sortedBy { it.percent }
 
     /**

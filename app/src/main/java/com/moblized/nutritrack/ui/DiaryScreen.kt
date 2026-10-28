@@ -233,7 +233,7 @@ fun DiaryContent(
                     }
                 }
             }
-            item { SummaryCard(totals, targets, streak) }
+            item { SummaryCard(totals, targets, streak, LowNutrients.dayIsJudged(date, now)) }
             if (warnings != null && !warnings.isEmpty) {
                 item(key = "low") { LowWarningCard(warnings, onSuggest) }
             }
@@ -311,10 +311,11 @@ fun DateTopBar(date: LocalDate, onDateChange: (LocalDate) -> Unit, title: String
     }
 }
 
-private fun statusLine(eaten: Double, target: Double): String {
+private fun statusLine(eaten: Double, target: Double, evening: Boolean): String {
     val f = if (target > 0) eaten / target else 0.0
     return when {
-        eaten <= 0.0 -> "Fresh start. Log your first bite!"
+        eaten <= 0.0 -> if (evening) "Nothing logged yet today" else "Fresh start. Log your first bite!"
+        f < 0.5 && evening -> "A light day so far. Still time for a good meal"
         f < 0.5 -> "Off to a good start"
         f < 0.95 -> "Keep it rolling"
         f <= 1.05 -> "Right on target. Nice!"
@@ -323,7 +324,7 @@ private fun statusLine(eaten: Double, target: Double): String {
 }
 
 @Composable
-private fun SummaryCard(totals: Map<Int, Double>, targets: Map<Int, Double>, streak: Int) {
+private fun SummaryCard(totals: Map<Int, Double>, targets: Map<Int, Double>, streak: Int, evening: Boolean) {
     val eaten = totals[Nutrients.ENERGY] ?: 0.0
     val target = targets[Nutrients.ENERGY] ?: 2000.0
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -338,7 +339,7 @@ private fun SummaryCard(totals: Map<Int, Double>, targets: Map<Int, Double>, str
                 }
             }
             Text(
-                statusLine(eaten, target),
+                statusLine(eaten, target, evening),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
