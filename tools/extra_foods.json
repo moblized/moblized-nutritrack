@@ -1,0 +1,93 @@
+{
+  "about": "Common recipe ingredients that USDA FoodData Central lacks. Values are per serving, copied from product nutrition labels; build_food_db.py scales them to 100 g. Ids start at 90000001 so they never collide with FDC ids.",
+  "foods": [
+    {
+      "id": 90000001,
+      "description": "High-protein milk (ultra-filtered), reduced fat (2%)",
+      "category": "Milk",
+      "label": "fairlife 2% Reduced Fat Ultra-Filtered Milk, fairlife.com",
+      "serving": ["1 cup (240 ml)", 247.5],
+      "per_serving": {
+        "kcal": 120, "fat": 4.5, "sat_fat": 3, "trans_fat": 0, "cholesterol": 20, "sodium": 120,
+        "carbs": 6, "fiber": 0, "sugars": 6, "added_sugars": 0, "protein": 13,
+        "vit_d": 5, "calcium": 380, "iron": 0, "potassium": 400, "vit_a": 120,
+        "riboflavin": 0.25, "vit_b12": 1.1, "phosphorus": 245, "magnesium": 25, "zinc": 1.4, "selenium": 10
+      },
+      "portions": [["1 cup", 244.0], ["1 fl oz", 30.5], ["1 tbsp", 15.25]]
+    },
+    {
+      "id": 90000002,
+      "description": "High-protein milk (ultra-filtered), fat free (skim)",
+      "category": "Milk",
+      "label": "fairlife Fat Free Ultra-Filtered Milk, heb.com",
+      "serving": ["1 cup (240 ml)", 247.5],
+      "per_serving": {
+        "kcal": 80, "fat": 0, "sat_fat": 0, "cholesterol": 5, "sodium": 120,
+        "carbs": 6, "sugars": 6, "added_sugars": 0, "protein": 13,
+        "vit_d": 5, "calcium": 380, "potassium": 400, "vit_a": 120
+      },
+      "portions": [["1 cup", 244.0], ["1 fl oz", 30.5], ["1 tbsp", 15.25]]
+    },
+    {
+      "id": 90000003,
+      "description": "High-protein milk (ultra-filtered), whole",
+      "category": "Milk",
+      "label": "fairlife Whole Ultra-Filtered Milk, fairlife.com",
+      "serving": ["1 cup (240 ml)", 247.5],
+      "per_serving": {
+        "kcal": 150, "fat": 8, "sat_fat": 5, "trans_fat": 0, "cholesterol": 30, "sodium": 120,
+        "carbs": 6, "fiber": 0, "sugars": 6, "protein": 13,
+        "vit_d": 5, "calcium": 380, "iron": 0, "potassium": 400, "vit_a": 120
+      },
+      "portions": [["1 cup", 244.0], ["1 fl oz", 30.5], ["1 tbsp", 15.25]]
+    },
+    {
+      "id": 90000010,
+      "description": "Erythritol sweetener (Swerve), granular or powdered",
+      "category": "Sugar substitutes",
+      "label": "Swerve Granular: 1 tsp (4 g), 0 kcal, 4 g carbohydrate (sugar alcohol), 0 g sugars",
+      "serving": ["1 tsp", 4.0],
+      "per_serving": {"kcal": 0, "fat": 0, "sodium": 0, "carbs": 4, "sugars": 0, "added_sugars": 0, "protein": 0},
+      "portions": [["1 tsp", 4.0], ["1 tbsp", 12.0], ["1 cup", 192.0]]
+    },
+    {
+      "id": 90000011,
+      "description": "Peanut butter, powdered (PB2)",
+      "category": "Peanut butter",
+      "label": "PB2 The Original Powdered Peanut Butter, shoprite.com",
+      "serving": ["2 tbsp", 13.0],
+      "per_serving": {
+        "kcal": 60, "fat": 1.5, "sat_fat": 0, "cholesterol": 0, "sodium": 90, "carbs": 5, "fiber": 1,
+        "sugars": 2, "added_sugars": 1, "protein": 6, "potassium": 150, "iron": 0.4, "calcium": 10, "vit_d": 0
+      },
+      "portions": [["2 tbsp", 13.0], ["1 tbsp", 6.5], ["1 cup", 104.0]]
+    },
+    {
+      "id": 90000020,
+      "description": "Food coloring (food color), liquid or gel",
+      "category": "Baking ingredients",
+      "label": "Liquid food colors list 0 kcal and 0 g of every nutrient per 1/4 tsp",
+      "serving": ["1/4 tsp", 1.3],
+      "per_serving": {"kcal": 0, "fat": 0, "sodium": 0, "carbs": 0, "sugars": 0, "protein": 0},
+      "portions": [["1 drop", 0.05], ["1 tsp", 5.0]]
+    },
+    {
+      "id": 90000021,
+      "description": "Peppermint extract",
+      "category": "Baking ingredients",
+      "label": "McCormick Pure Peppermint Extract: 1/4 tsp (1.1 g), 0 kcal",
+      "serving": ["1/4 tsp", 1.1],
+      "per_serving": {"kcal": 0, "fat": 0, "sodium": 0, "carbs": 0, "sugars": 0, "protein": 0},
+      "portions": [["1 tsp", 4.4], ["1 tbsp", 13.2], ["1 drop", 0.05]]
+    },
+    {
+      "id": 90000022,
+      "description": "Flavoring extract (almond, lemon, orange, coconut, maple, rum, banana)",
+      "category": "Baking ingredients",
+      "label": "McCormick Pure Lemon and Pure Orange Extract: 1 tsp (5 g), 0 kcal",
+      "serving": ["1 tsp", 5.0],
+      "per_serving": {"kcal": 0, "fat": 0, "sodium": 0, "carbs": 0, "sugars": 0, "protein": 0},
+      "portions": [["1 tsp", 5.0], ["1 tbsp", 15.0], ["1 drop", 0.05]]
+    }
+  ]
+}

@@ -168,6 +168,7 @@ class UsdaDatabase(private val context: Context) : FoodCandidateSource {
             0 -> "USDA SR Legacy"
             1 -> "USDA Foundation"
             2 -> "USDA Survey (FNDDS)"
+            3 -> "Nutrition label"
             else -> "USDA"
         }
         return if (category.isNullOrBlank()) src else "$category · $src"

@@ -63,6 +63,38 @@ FALLBACKS.setdefault(1114, []).append(1110)
 
 UNIT_SCALE = {"G": 1.0, "MG": 1e-3, "UG": 1e-6}
 
+# Foods USDA lacks (erythritol, food coloring, ...), entered from their nutrition labels.
+EXTRA_FOODS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "extra_foods.json")
+EXTRA_SOURCE = 3
+# Label field -> FDC nutrient id; units match TRACKED (g, mg, ug, kcal).
+LABEL_NUTRIENTS = {
+    "kcal": 1008, "fat": 1004, "sat_fat": 1258, "trans_fat": 1257, "cholesterol": 1253, "sodium": 1093,
+    "carbs": 1005, "fiber": 1079, "sugars": 2000, "added_sugars": 1235, "protein": 1003, "alcohol": 1018,
+    "vit_d": 1114, "calcium": 1087, "iron": 1089, "potassium": 1092, "vit_a": 1106, "riboflavin": 1166,
+    "vit_b12": 1178, "phosphorus": 1091, "magnesium": 1090, "zinc": 1095, "selenium": 1103,
+}
+
+
+def add_extra_foods(db, path=EXTRA_FOODS):
+    """Inserts the label-based foods into `foods`; returns how many were added."""
+    with open(path, encoding="utf-8") as fh:
+        extras = json.load(fh)["foods"]
+    for f in extras:
+        grams = float(f["serving"][1])
+        per100 = {}
+        for key, value in f["per_serving"].items():
+            nid = LABEL_NUTRIENTS[key]
+            if nid not in TRACKED:
+                raise SystemExit(f"{f['description']}: {key} is not a tracked nutrient")
+            per100[nid] = sig(value * 100.0 / grams)
+        enc = ";".join(f"{k}:{v:g}" for k, v in sorted(per100.items()))
+        portions = [[label, round(float(g), 2)] for label, g in f["portions"]]
+        db.execute("INSERT INTO foods VALUES (?,?,?,?,?,?,?,?)", (
+            int(f["id"]), f["description"], f["category"], EXTRA_SOURCE, per100.get(1008), len(per100), enc,
+            json.dumps(portions, separators=(",", ":")),
+        ))
+    return len(extras)
+
 
 # Everyday single foods from the USDA survey database (FNDDS), grouped by food group.
 GROUPS = {
@@ -418,6 +450,11 @@ def build(sources, out_path):
         if sug:
             db.execute("INSERT INTO suggest VALUES (?,?,?,?)", (fid, sug[0], sug[1], sug[2]))
             pooled += 1
+
+    extra = add_extra_foods(db)
+    written += extra
+    with_energy += extra
+    log(f"added {extra} foods from nutrition labels")
 
     db.execute('CREATE VIRTUAL TABLE food_fts USING fts4(content="foods", description)')
     db.execute("INSERT INTO food_fts(food_fts) VALUES('rebuild')")

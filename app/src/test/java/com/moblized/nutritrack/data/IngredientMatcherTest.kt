@@ -95,6 +95,32 @@ class IngredientMatcherTest {
             assertEquals("fl oz", it.unit)
             assertEquals("milk", it.query)
         }
+        // Alternatives: the first choice counts, and a note that is only an alternative is dropped.
+        IngredientParser.parse("430 gram 2% High-Protein Milk or 215 g 2% + 215 g fat-free").let {
+            assertEquals(430.0, it.quantity!!, 1e-9)
+            assertEquals("g", it.unit)
+            assertEquals("2% High-Protein Milk", it.food)
+        }
+        IngredientParser.parse("20 g sweetener", foodHint = "Erythritol/Swerve").let { assertEquals("Erythritol", it.food) }
+        IngredientParser.parse("2 cups chicken or vegetable broth").let { assertEquals("chicken broth", it.food) }
+        IngredientParser.parse("32 g whey", foodHint = "vanilla whey protein powder", noteHint = "or 1 scoop").let { assertEquals("", it.note) }
+        IngredientParser.parse("30 g chips", foodHint = "chocolate chips", noteHint = "spread 1/8 inch thick on parchment paper, then frozen").let {
+            assertEquals("", it.note)
+        }
+        // Drops are a volume; count units can come after the food.
+        IngredientParser.parse("12 drops peppermint extract").let {
+            assertEquals("drop", it.unit)
+            assertEquals(UnitKind.VOLUME, it.kind)
+        }
+        IngredientParser.parse("8 drops food coloring", unitHint = "drops").let { assertEquals("drop", it.unit) }
+        IngredientParser.parse("3 garlic cloves").let {
+            assertEquals("clove", it.unit)
+            assertEquals("garlic", it.food)
+        }
+        assertEquals(listOf("pct2", "high", "protein", "milk"), IngredientParser.words("2% High-Protein Milk"))
+        assertEquals("clove", IngredientParser.singular("cloves"))
+        assertEquals("olive", IngredientParser.singular("olives"))
+        assertEquals("leaf", IngredientParser.singular("leaves"))
         // Mealie's own parser results take priority over the text.
         IngredientParser.parse("2 cups flour", quantityHint = 3.0, unitHint = "Cup", foodHint = "bread flour").let {
             assertEquals(3.0, it.quantity!!, 1e-9)
@@ -127,6 +153,25 @@ class IngredientMatcherTest {
         assertTrue("${failures.size} of ${cases.size} lines differ:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
+    /** Lines whose unit has no gram weight are flagged instead of guessed (it used to be 3,840 g of extract). */
+    @Test
+    fun asksInsteadOfGuessingUnknownUnits() {
+        val db = listOf("src/main/assets/usda.db", "app/src/main/assets/usda.db").map(::File).firstOrNull { it.exists() }
+        Assume.assumeTrue("usda.db has not been built", db != null)
+        val conn = DriverManager.getConnection("jdbc:sqlite:" + db!!.absolutePath)
+        val matcher = IngredientMatcher(JdbcSource(conn))
+        matcher.match(MealieIngredient(2.0, "leaves", "bay", "2 bay leaves")).let {
+            println("MATCH  2 bay leaves  ->  ${it.item?.name}  unconverted=${it.unconverted}")
+            assertTrue("bay leaves should ask for an amount", it.unconverted)
+        }
+        matcher.match(MealieIngredient(8.0, "drop", "Green Food Coloring", "8 drops Green Food Coloring")).let {
+            assertTrue((it.item?.grams ?: 99.0) < 1.0)
+        }
+        // Nothing in the database is called "coloring" except the label food; nothing is called "zorblax" at all.
+        assertNull(matcher.match(MealieIngredient(1.0, "cup", "zorblax", "1 cup zorblax")).item)
+        conn.close()
+    }
+
     /** A real Mealie recipe whose lines are split into food + note ("pepperoni" + "turkey"). */
     @Test
     fun matchesParsedMealieIngredients() {
@@ -141,7 +186,10 @@ class IngredientMatcherTest {
             val (text, food, note) = Triple(c[0], c[1], c[2])
             val expectedFood = c[3]
             val expectedGrams = c[4].toDouble()
-            val m = matcher.match(MealieIngredient(null, null, food.ifBlank { null }, text, note.ifBlank { null }))
+            // Optional: the quantity and unit Mealie's parser sends with the line.
+            val quantity = c.getOrNull(6)?.toDoubleOrNull()
+            val unit = c.getOrNull(7)?.ifBlank { null }
+            val m = matcher.match(MealieIngredient(quantity, unit, food.ifBlank { null }, text, note.ifBlank { null }))
             val item = m.item
             println("MATCH  $text  ->  ${item?.name}  ${item?.grams}")
             if (item?.name != expectedFood) failures += "$text: expected '$expectedFood', got '${item?.name}'"

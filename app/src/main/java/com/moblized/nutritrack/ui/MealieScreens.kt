@@ -175,6 +175,8 @@ private data class ImportRow(
     val include: Boolean,
     val estimated: Boolean,
     val missingAmount: Boolean,
+    /** The recipe's unit ("12 drops", "1 bunch") couldn't be turned into grams for this food. */
+    val unconverted: Boolean = false,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -218,9 +220,10 @@ fun MealieImportScreen(slug: String, onBack: () -> Unit, onImported: (Long) -> U
             rows += ImportRow(
                 ingredient = ing,
                 item = m?.item,
-                include = m != null && m.item != null && !m.missingAmount,
+                include = m != null && m.item != null && !m.missingAmount && !m.unconverted,
                 estimated = m?.estimated ?: false,
                 missingAmount = m?.missingAmount ?: false,
+                unconverted = m?.unconverted ?: false,
             )
             matched++
         }
@@ -391,7 +394,7 @@ fun MealieImportScreen(slug: String, onBack: () -> Unit, onImported: (Long) -> U
                 initial = item,
                 onDismiss = { editIndex = null },
                 onConfirm = { updated ->
-                    rows[i] = row.copy(item = updated, include = true, estimated = false, missingAmount = false)
+                    rows[i] = row.copy(item = updated, include = true, estimated = false, missingAmount = false, unconverted = false)
                     editIndex = null
                 },
             )
@@ -407,7 +410,7 @@ fun MealieImportScreen(slug: String, onBack: () -> Unit, onImported: (Long) -> U
                 excludeRecipeId = existing?.id ?: 0L,
                 onDismiss = { pickIndex = null },
                 onPicked = { item ->
-                    rows[i] = row.copy(item = item, include = true, estimated = false, missingAmount = false)
+                    rows[i] = row.copy(item = item, include = true, estimated = false, missingAmount = false, unconverted = false)
                     pickIndex = null
                 },
             )
@@ -454,6 +457,11 @@ private fun ImportRowView(
                     when {
                         row.missingAmount -> Text(
                             "No amount in the recipe. Tap to set one, or leave it out.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                        row.unconverted -> Text(
+                            "Couldn't turn the recipe's amount into grams for this food. Tap to set it.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary,
                         )

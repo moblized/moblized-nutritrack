@@ -1,7 +1,7 @@
 120 g flour bread	flour	bread	Flour, bread, white, enriched, unbleached	120.0	0
 40 g wheat gluten vital	wheat gluten	vital	Vital wheat gluten	40.0	0
 100 g 2% Greek Yogurt nonfat	2% Greek Yogurt	nonfat	Yogurt, Greek, plain, nonfat	100.0	0
-60 g water warm	water	warm	Water, bottled, generic	60.0	0
+60 g water warm	water	warm	Water, NFS	60.0	0
 3 g dry yeast instant	dry yeast	instant	Leavening agents, yeast, baker's, active dry	3.0	0
 4 g sea salt fine	sea salt	fine	Salt, table	4.0	0
 3 g honey	honey		Honey	3.0	0
@@ -12,3 +12,16 @@
 80 g shredded mozzarella low-fat	shredded mozzarella	low-fat	Cheese, mozzarella, low moisture, part-skim, shredded	80.0	0
 50 g pepperoni turkey	pepperoni	turkey	Hormel Pillow Pak Sliced Turkey Pepperoni	50.0	0
 5 g basil leaves fresh	basil leaves	fresh	Basil, fresh	5.0	0
+430 gram 2% High-Protein Milk or 215 g 2% + 215 g fat-free	2% High-Protein Milk	or 215 g 2% + 215 g fat-free	High-protein milk (ultra-filtered), reduced fat (2%)	430.0	0	430	gram
+4 1/5 gram vanilla extract	vanilla extract		Vanilla extract	4.2	0	4.2	gram
+8 drops Green Food Coloring	Green Food Coloring		Food coloring (food color), liquid or gel	0.4	0	8	drop
+12 drops McCormick Peppermint Extract or 4 drops LorAnn Peppermint Oil	McCormick Peppermint Extract	or 4 drops LorAnn Peppermint Oil	Peppermint extract	0.6	0	12	drops
+32 2/5 gram vanilla whey protein powder or 1 scoop	vanilla whey protein powder	or 1 scoop	Beverages, Protein powder whey based	32.4	0	32.4	gram
+20 gram Erythritol/Swerve	Erythritol/Swerve		Erythritol sweetener (Swerve), granular or powdered	20.0	0	20	gram
+1/2 gram salt	salt		Salt, table	0.5	0	0.5	gram
+1/2 gram xanthan gum	xanthan gum		Gums, seed gums (includes locust bean, guar)	0.5	0	0.5	gram
+30 gram Custom Soft Chocolate Chips spread 1/8 inch thick on parchment paper, 113.5 g semi-sweet chocolate + 7 g peanut oil double-boiled, frozen, and chopped	Custom Soft Chocolate Chips	spread 1/8 inch thick on parchment paper, 113.5 g semi-sweet chocolate + 7 g peanut oil double-boiled, frozen, and chopped	Chocolate chips	30.0	0	30	gram
+430 gram 2% High-Protein Milk or 215 g 2% + 215 g fat-free			High-protein milk (ultra-filtered), reduced fat (2%)	430.0	0
+8 drops Green Food Coloring			Food coloring (food color), liquid or gel	0.4	0
+12 drops McCormick Peppermint Extract or 4 drops LorAnn Peppermint Oil			Peppermint extract	0.6	0
+20 gram Erythritol/Swerve			Erythritol sweetener (Swerve), granular or powdered	20.0	0

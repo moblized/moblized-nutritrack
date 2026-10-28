@@ -483,7 +483,8 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                     count.intValue = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Graph.app.usda.foodCount() }
                 }
                 Text(
-                    "Food data: USDA FoodData Central (Foundation, SR Legacy and FNDDS), " +
+                    "Food data: USDA FoodData Central (Foundation, SR Legacy and FNDDS), plus a few items USDA lacks " +
+                        "(erythritol, PB2, high-protein milk, extracts) from their nutrition labels; " +
                         "${String.format(java.util.Locale.US, "%,d", count.intValue)} foods stored on your phone. " +
                         "Barcode data: Open Food Facts (ODbL). Targets: US Dietary Reference Intakes.",
                     style = MaterialTheme.typography.bodySmall,

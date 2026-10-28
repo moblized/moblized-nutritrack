@@ -8,3 +8,4 @@ tools/cache/
 app/src/main/assets/usda.db
 captures/
 .kotlin/
+__pycache__/
