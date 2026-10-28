@@ -1,7 +1,10 @@
 package com.moblized.nutritrack.ui
 
 import android.app.Application
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -154,6 +157,32 @@ class ScreenshotTest {
         )
         shoot("5_search_dark", dark = true) {
             Column { rows.forEach { FoodResultRow(it) {} } }
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h200dp-xhdpi")
+    fun launcherIcons() {
+        shoot("6_launcher_icons") {
+            androidx.compose.foundation.layout.Row(
+                Modifier.padding(16.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp),
+            ) {
+                listOf(
+                    com.moblized.nutritrack.R.drawable.ic_launcher_foreground to androidx.compose.ui.graphics.Color(0xFFE3F4E9),
+                    com.moblized.nutritrack.R.drawable.ic_launcher_foreground_dark to androidx.compose.ui.graphics.Color(0xFF0E1B15),
+                    com.moblized.nutritrack.R.drawable.ic_launcher_monochrome to androidx.compose.ui.graphics.Color(0xFFD7E3DB),
+                ).forEach { (res, bg) ->
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(res),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(110.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(bg),
+                    )
+                }
+            }
         }
     }
 }
