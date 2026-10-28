@@ -263,10 +263,11 @@ private fun SuggestionCard(s: Suggestion, onAdd: (SuggestCandidate) -> Unit) {
     }
 }
 
-private fun portionText(c: SuggestCandidate): String = when (c.unitLabel) {
-    "g" -> "${fmtAmount(c.grams)} g"
-    "oz" -> "${fmtQty(c.quantity)} oz"
-    else -> if (c.quantity == 1.0) c.unitLabel else "${fmtQty(c.quantity)} × ${c.unitLabel}"
+private fun portionText(c: SuggestCandidate): String = when {
+    c.unitLabel == "g" -> "${fmtAmount(c.grams)} g"
+    c.quantity == 1.0 && c.unitLabel.firstOrNull()?.isDigit() == true -> c.unitLabel
+    c.quantity == 1.0 && c.unitLabel == "typical serving" -> "1 serving"
+    else -> amountText(c.quantity, c.unitLabel, c.grams).substringBefore(" · ")
 }
 
 private fun shortName(id: Int): String = when (id) {

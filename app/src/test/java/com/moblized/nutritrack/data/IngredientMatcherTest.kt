@@ -76,7 +76,18 @@ class IngredientMatcherTest {
             assertEquals("clove", it.unit)
             assertEquals("garlic", it.query)
         }
-        IngredientParser.parse("1 jalapeño, seeded and minced").let { assertEquals("jalapeno", it.query) }
+        IngredientParser.parse("1 jalapeño, seeded and minced").let {
+            assertEquals("jalapeno", it.query)
+            assertEquals("seeded and minced", it.note)
+        }
+        IngredientParser.parse("80 g canned San Marzano tomatoes crushed").let {
+            assertTrue(it.canned)
+            assertEquals(80.0, it.quantity!!, 1e-9)
+        }
+        IngredientParser.parse("50 g pepperoni", foodHint = "pepperoni", noteHint = "turkey").let {
+            assertEquals("pepperoni", it.food)
+            assertEquals("turkey", it.note)
+        }
         IngredientParser.parse("1 T sugar").let { assertEquals("tbsp", it.unit) }
         IngredientParser.parse("1 t salt").let { assertEquals("tsp", it.unit) }
         IngredientParser.parse("salt and pepper to taste").let { assertNull(it.quantity) }
@@ -114,5 +125,30 @@ class IngredientMatcherTest {
         conn.close()
         failures.forEach { println("MISMATCH $it") }
         assertTrue("${failures.size} of ${cases.size} lines differ:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /** A real Mealie recipe whose lines are split into food + note ("pepperoni" + "turkey"). */
+    @Test
+    fun matchesParsedMealieIngredients() {
+        val db = listOf("src/main/assets/usda.db", "app/src/main/assets/usda.db").map(::File).firstOrNull { it.exists() }
+        Assume.assumeTrue("usda.db has not been built", db != null)
+        val conn = DriverManager.getConnection("jdbc:sqlite:" + db!!.absolutePath)
+        val matcher = IngredientMatcher(JdbcSource(conn))
+        val cases = javaClass.getResourceAsStream("/mealie_cases.tsv")!!.bufferedReader().readLines().filter { it.isNotBlank() }
+        val failures = ArrayList<String>()
+        for (case in cases) {
+            val c = case.split('\t')
+            val (text, food, note) = Triple(c[0], c[1], c[2])
+            val expectedFood = c[3]
+            val expectedGrams = c[4].toDouble()
+            val m = matcher.match(MealieIngredient(null, null, food.ifBlank { null }, text, note.ifBlank { null }))
+            val item = m.item
+            println("MATCH  $text  ->  ${item?.name}  ${item?.grams}")
+            if (item?.name != expectedFood) failures += "$text: expected '$expectedFood', got '${item?.name}'"
+            else if (abs(item.grams - expectedGrams) > max(1.0, expectedGrams * 0.05)) failures += "$text: expected $expectedGrams g, got ${item.grams} g"
+        }
+        conn.close()
+        failures.forEach { println("MISMATCH $it") }
+        assertTrue("${failures.size} of ${cases.size} Mealie lines differ:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 }

@@ -26,6 +26,8 @@ data class MealieIngredient(
     val food: String?,
     /** The line as written in the recipe. */
     val text: String,
+    /** Mealie's note for a parsed ingredient, e.g. "turkey" for pepperoni or "low-fat" for mozzarella. */
+    val note: String? = null,
 )
 
 data class MealieRecipe(
@@ -126,7 +128,16 @@ class MealieClient(baseUrl: String, private val token: String) {
                 ?.takeIf { it.isNotBlank() }
             val food = ing.optJSONObject("food")?.str("name")?.takeIf { it.isNotBlank() }
             if (text.isBlank() && food == null) continue
-            ingredients += MealieIngredient(qty, unit, food, text.ifBlank { listOfNotNull(food).joinToString() })
+            val note = ing.str("note").takeIf { it.isNotBlank() && food != null }
+            // Amount and unit are only meaningful once Mealie has parsed the line into a food;
+            // unparsed lines keep a placeholder quantity, so read the amount from the text instead.
+            ingredients += MealieIngredient(
+                quantity = if (food != null) qty else null,
+                unit = if (food != null) unit else null,
+                food = food,
+                text = text.ifBlank { listOfNotNull(qty?.let { fmtNumber(it) }, unit, food, note).joinToString(" ") },
+                note = note,
+            )
         }
         val servings = o.optDouble("recipeServings", Double.NaN).takeIf { it.isFinite() && it > 0 }
             ?: o.optDouble("recipeYieldQuantity", Double.NaN).takeIf { it.isFinite() && it > 0 }
@@ -188,6 +199,8 @@ class MealieClient(baseUrl: String, private val token: String) {
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
+
+private fun fmtNumber(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
 
 /** org.json returns the text "null" for JSON nulls; this returns "" instead. */
 internal fun JSONObject.str(key: String): String = if (isNull(key)) "" else optString(key).trim()

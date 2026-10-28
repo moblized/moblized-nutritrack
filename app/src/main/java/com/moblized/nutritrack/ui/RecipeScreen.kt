@@ -182,7 +182,7 @@ fun RecipeScreen(
                     Column(Modifier.weight(1f)) {
                         Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "${fmtQty(item.quantity)} ${item.unitLabel} · ${fmtAmount(item.grams)} g · " +
+                            "${amountText(item.quantity, item.unitLabel, item.grams)} · " +
                                 "${fmtKcal((NutrientCodec.decode(item.per100)[Nutrients.ENERGY] ?: 0.0) * item.grams / 100)} kcal",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -606,7 +606,7 @@ private fun MealCard(meal: Int, entries: List<DiaryEntry>, onAdd: () -> Unit, on
                     Column(Modifier.weight(1f)) {
                         Text(e.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(
-                            if (e.unitLabel == "g") "${fmtAmount(e.grams)} g" else "${fmtQty(e.quantity)} ${e.unitLabel} · ${fmtAmount(e.grams)} g",
+                            amountText(e.quantity, e.unitLabel, e.grams),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

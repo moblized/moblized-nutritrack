@@ -47,7 +47,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 private val tabs = listOf(
     Tab("diary", "Diary", Icons.Filled.Restaurant),
     Tab("nutrients", "Nutrients", Icons.Filled.BarChart),
-    Tab("eat", "What to eat", Icons.Filled.TipsAndUpdates),
+    Tab("eat", "Ideas", Icons.Filled.TipsAndUpdates),
     Tab("foods", "My foods", Icons.Filled.Kitchen),
     Tab("settings", "Settings", Icons.Filled.Settings),
 )

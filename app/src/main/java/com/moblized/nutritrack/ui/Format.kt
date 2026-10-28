@@ -39,3 +39,18 @@ fun dateLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String = whe
 
 fun pct(value: Double, target: Double?): Int? =
     if (target == null || target <= 0) null else (value / target * 100).roundToInt()
+
+/**
+ * How much of something: "60 g", "½ tsp · 2.5 g", "2 large · 100 g".
+ * USDA portion labels often start with "1" ("1 tsp", "1 cup, chopped"); that 1 is folded into the amount.
+ */
+fun amountText(quantity: Double, unitLabel: String, grams: Double): String {
+    val label = unitLabel.trim()
+    if (label == "g") return "${fmtAmount(grams)} g"
+    val unit = when {
+        label.startsWith("1 ") -> label.removePrefix("1 ")
+        label.firstOrNull()?.isDigit() == true -> "× $label"
+        else -> label
+    }
+    return "${fmtQty(quantity)} $unit · ${fmtAmount(grams)} g"
+}

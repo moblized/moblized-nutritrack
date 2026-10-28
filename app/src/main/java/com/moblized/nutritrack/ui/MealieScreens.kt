@@ -447,7 +447,7 @@ private fun ImportRowView(
                     )
                     val kcal = (NutrientCodec.decode(item.per100)[Nutrients.ENERGY] ?: 0.0) * item.grams / 100
                     Text(
-                        "${fmtQty(item.quantity)} × ${item.unitLabel} = ${fmtAmount(item.grams)} g · ${fmtKcal(kcal)} kcal",
+                        "${amountText(item.quantity, item.unitLabel, item.grams)} · ${fmtKcal(kcal)} kcal",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
