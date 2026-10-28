@@ -135,7 +135,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding(), bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Section("Profile") }
+            item { Section("👤 Profile") }
             item {
                 ChoiceRow(Sex.entries.toList(), p.sex, { it.label }, { s -> saveProfile { it.copy(sex = s) } })
             }
@@ -192,7 +192,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
-            item { Section("Daily targets") }
+            item { Section("🎯 Daily targets") }
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
@@ -258,7 +258,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 )
             }
 
-            item { Section("Appearance") }
+            item { Section("🎨 Appearance") }
             item {
                 ChoiceRow(ThemeMode.entries.toList(), settings.themeMode, { it.label }, { m -> scope.launch { repo.setTheme(m) } })
             }
@@ -280,7 +280,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 ChoiceRow(Units.entries.toList(), settings.units, { it.label }, { u -> scope.launch { repo.setUnits(u) } })
             }
 
-            item { Section("Health Connect") }
+            item { Section("❤️ Health Connect") }
             item {
                 if (hcAvailable) {
                     SwitchLine(
@@ -315,7 +315,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
-            item { Section("Smart scale") }
+            item { Section("⚖️ Smart scale") }
             item {
                 if (hcAvailable) {
                     SwitchLine(
@@ -350,7 +350,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
-            item { Section("Mealie") }
+            item { Section("🍲 Mealie") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -412,7 +412,7 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
-            item { Section("About") }
+            item { Section("ℹ️ About") }
             item {
                 val count = remember { mutableIntStateOf(0) }
                 LaunchedEffect(Unit) {
@@ -444,7 +444,7 @@ private fun saveHeightUs(feet: String, inches: String, onValid: (Double) -> Unit
 private fun Section(title: String) {
     Text(
         title,
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 12.dp),
     )

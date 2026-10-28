@@ -60,6 +60,7 @@ import com.moblized.nutritrack.data.FoodSummary
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Meals
 import com.moblized.nutritrack.data.OpenFoodFacts
+import com.moblized.nutritrack.ui.theme.foodTileColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -69,12 +70,13 @@ import java.time.LocalDate
 fun AddFoodScreen(
     date: LocalDate,
     meal: Int,
+    initialQuery: String = "",
     onBack: () -> Unit,
     onOpenFood: (FoodSource, Long) -> Unit,
     onCreateFood: (String?) -> Unit,
     onCreateRecipe: () -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf(initialQuery) }
     var results by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var recent by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -146,7 +148,7 @@ fun AddFoodScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Add to ${Meals.name(meal)}")
+                        Text("${Emoji.meal(meal)} Add to ${Meals.name(meal)}")
                         Text(
                             dateLabel(date),
                             style = MaterialTheme.typography.labelMedium,
@@ -221,10 +223,32 @@ fun AddFoodScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
+                if (query.isBlank() && recent.isEmpty() && !lookingUp) {
+                    item {
+                        Column(
+                            Modifier.fillMaxWidth().padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text("🥕🍳🥑", style = MaterialTheme.typography.displaySmall)
+                            Text(
+                                "What are you eating?",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
+                            Text(
+                                "Search above or scan a barcode. Foods you log show up here for one-tap adding.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
                 if (query.isBlank() && recent.isNotEmpty()) {
                     item {
                         Text(
-                            "Recent",
+                            "🕒 Recent",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -234,7 +258,7 @@ fun AddFoodScreen(
                 if (query.isNotBlank() && !searching && results.isEmpty()) {
                     item {
                         Text(
-                            "No matches. Try fewer words (\"oats\" instead of \"rolled oats old fashioned\"), or create the food.",
+                            "🤔 No matches. Try fewer words (\"oats\" instead of \"rolled oats old fashioned\"), or create the food.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp),
@@ -252,8 +276,12 @@ fun AddFoodScreen(
 
 @Composable
 fun FoodResultRow(f: FoodSummary, onClick: () -> Unit) {
+    val category = if (f.source == FoodSource.USDA) f.detail.substringBefore(" · ") else null
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
+        leadingContent = {
+            EmojiTile(Emoji.food(f.name, category, f.source), foodTileColor(f.name), size = 42.dp)
+        },
         headlineContent = { Text(f.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
             Text(f.detail, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
@@ -261,7 +289,7 @@ fun FoodResultRow(f: FoodSummary, onClick: () -> Unit) {
         trailingContent = {
             f.kcalPer100?.let {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(fmtKcal(it), style = MaterialTheme.typography.bodyMedium)
+                    Text(fmtKcal(it), style = MaterialTheme.typography.titleSmall)
                     Text("kcal/100g", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

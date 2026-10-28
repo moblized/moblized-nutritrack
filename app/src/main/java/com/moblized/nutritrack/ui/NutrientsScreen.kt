@@ -1,6 +1,8 @@
 package com.moblized.nutritrack.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,23 +75,15 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
                 Spacer(Modifier.height(8.dp))
             }
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            "$met of ${goalDefs.size} targets met",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            when {
-                                entries.isEmpty() -> "Nothing logged for this period yet."
-                                range == Range.DAY -> "${fmtKcal(totals[Nutrients.ENERGY] ?: 0.0)} kcal from ${entries.size} foods"
-                                else -> "Averaged over $loggedDays logged ${if (loggedDays == 1) "day" else "days"}"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                TargetsMetCard(
+                    met = met,
+                    total = goalDefs.size,
+                    subtitle = when {
+                        entries.isEmpty() -> "Nothing logged for this period yet."
+                        range == Range.DAY -> "${fmtKcal(totals[Nutrients.ENERGY] ?: 0.0)} kcal from ${entries.size} foods"
+                        else -> "Averaged over $loggedDays logged ${if (loggedDays == 1) "day" else "days"}"
+                    },
+                )
                 Spacer(Modifier.height(8.dp))
             }
             item {
@@ -102,6 +97,30 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+        }
+    }
+}
+
+/** How many nutrient goals are met, shown as a little plant that grows into a trophy. */
+@Composable
+fun TargetsMetCard(met: Int, total: Int, subtitle: String) {
+    val frac = if (total > 0) met.toFloat() / total else 0f
+    val badge = when {
+        frac >= 0.75f -> "🏆"
+        frac >= 0.5f -> "🌳"
+        frac >= 0.25f -> "🌿"
+        else -> "🌱"
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            EmojiTile(badge, MaterialTheme.colorScheme.primaryContainer, size = 56.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("$met of $total goals hit", style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                ProgressBar(frac, MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth())
             }
         }
     }

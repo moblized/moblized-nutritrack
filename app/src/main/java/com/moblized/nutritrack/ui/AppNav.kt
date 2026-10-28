@@ -33,6 +33,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.moblized.nutritrack.data.FoodSource
 import com.moblized.nutritrack.data.Graph
+import com.moblized.nutritrack.data.Meals
 import com.moblized.nutritrack.data.Settings
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
@@ -50,7 +51,8 @@ private val tabs = listOf(
 )
 
 object Routes {
-    fun add(date: LocalDate, meal: Int) = "add/$date/$meal"
+    fun add(date: LocalDate, meal: Int, query: String? = null) =
+        "add/$date/$meal" + (query?.let { "?q=" + android.net.Uri.encode(it) } ?: "")
     fun food(source: FoodSource, id: Long, date: LocalDate, meal: Int, entryId: Long = 0) =
         "food/${source.key}/$id?date=$date&meal=$meal&entry=$entryId"
     fun custom(id: Long, barcode: String? = null) =
@@ -99,6 +101,10 @@ fun AppNav(settings: Settings) {
                                 }
                             }
                         },
+                        onSuggest = { food ->
+                            val meal = if (date == LocalDate.now()) Meals.forHour(java.time.LocalTime.now().hour) else 3
+                            nav.navigate(Routes.add(date, meal, food))
+                        },
                     )
                 }
                 composable("nutrients") {
@@ -115,10 +121,11 @@ fun AppNav(settings: Settings) {
                     SettingsScreen(settings = settings, onOpenTargets = { nav.navigate(Routes.TARGETS) })
                 }
                 composable(
-                    "add/{date}/{meal}",
+                    "add/{date}/{meal}?q={q}",
                     arguments = listOf(
                         navArgument("date") { type = NavType.StringType },
                         navArgument("meal") { type = NavType.IntType },
+                        navArgument("q") { type = NavType.StringType; defaultValue = "" },
                     ),
                 ) { entry ->
                     val d = LocalDate.parse(entry.arguments?.getString("date") ?: LocalDate.now().toString())
@@ -136,6 +143,7 @@ fun AppNav(settings: Settings) {
                     AddFoodScreen(
                         date = d,
                         meal = meal,
+                        initialQuery = entry.arguments?.getString("q").orEmpty(),
                         onBack = { nav.popBackStack() },
                         onOpenFood = { source, id -> nav.navigate(Routes.food(source, id, d, meal)) },
                         onCreateFood = { barcode -> nav.navigate(Routes.custom(0, barcode)) },

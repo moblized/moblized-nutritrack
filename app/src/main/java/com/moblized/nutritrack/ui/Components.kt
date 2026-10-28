@@ -1,5 +1,8 @@
 package com.moblized.nutritrack.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -34,10 +37,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,31 +53,45 @@ import com.moblized.nutritrack.data.Portion
 import com.moblized.nutritrack.data.TargetKind
 import com.moblized.nutritrack.ui.theme.color
 
+/** Animated calorie ring with a gradient arc and a mood emoji. */
 @Composable
-fun CalorieRing(eaten: Double, target: Double, modifier: Modifier = Modifier, size: Dp = 132.dp) {
+fun CalorieRing(eaten: Double, target: Double, modifier: Modifier = Modifier, size: Dp = 140.dp) {
     val track = MaterialTheme.colorScheme.surfaceVariant
-    val over = eaten > target && target > 0
-    val color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    val frac = if (target > 0) (eaten / target).toFloat().coerceIn(0f, 1f) else 0f
+    val over = eaten > target * 1.05 && target > 0
+    val raw = if (target > 0) (eaten / target).toFloat() else 0f
+    val frac by animateFloatAsState(raw.coerceIn(0f, 1f), tween(900, easing = FastOutSlowInEasing), label = "ring")
+    val brush = if (over) {
+        Brush.linearGradient(listOf(Color(0xFFFF8A65), MaterialTheme.colorScheme.error))
+    } else {
+        Brush.linearGradient(listOf(Color(0xFF36C47F), Color(0xFF16A6C9)))
+    }
+    val mood = when {
+        eaten <= 0.0 -> "🍽️"
+        over -> "🍕"
+        raw >= 0.95f -> "🎯"
+        raw >= 0.5f -> "💪"
+        else -> "🌱"
+    }
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = 12.dp.toPx()
+            val stroke = 14.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(this.size.width - stroke, this.size.height - stroke)
             drawArc(track, 135f, 270f, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-            if (frac > 0f) {
-                drawArc(color, 135f, 270f * frac, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            if (frac > 0.005f) {
+                drawArc(brush, 135f, 270f * frac, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(mood, style = MaterialTheme.typography.titleLarge)
             val remaining = target - eaten
             Text(
                 fmtKcal(kotlin.math.abs(remaining)),
                 style = MaterialTheme.typography.headlineMedium,
-                color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                color = if (remaining < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                if (over) "kcal over" else "kcal left",
+                if (remaining < 0) "kcal over" else "kcal left",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -80,28 +99,32 @@ fun CalorieRing(eaten: Double, target: Double, modifier: Modifier = Modifier, si
     }
 }
 
+/** A rounded bar that grows smoothly when the value changes. */
 @Composable
 fun ProgressBar(fraction: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 8.dp) {
+    val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(700, easing = FastOutSlowInEasing), label = "bar")
     Box(
         modifier
             .height(height)
             .clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .height(height)
-                .clip(RoundedCornerShape(50))
-                .background(color),
-        )
+        if (animated > 0.001f) {
+            Box(
+                Modifier
+                    .fillMaxWidth(animated)
+                    .height(height)
+                    .clip(RoundedCornerShape(50))
+                    .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.75f), color))),
+            )
+        }
     }
 }
 
 @Composable
-fun MacroColumn(label: String, value: Double, target: Double?, color: Color, modifier: Modifier = Modifier) {
+fun MacroColumn(emoji: String, label: String, value: Double, target: Double?, color: Color, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("$emoji $label", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         Spacer(Modifier.height(2.dp))
         Text(
             buildString {
@@ -110,7 +133,7 @@ fun MacroColumn(label: String, value: Double, target: Double?, color: Color, mod
                 append(" g")
             },
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -119,7 +142,7 @@ fun MacroColumn(label: String, value: Double, target: Double?, color: Color, mod
     }
 }
 
-/** One nutrient with amount, target and a progress bar. */
+/** One nutrient with its emoji, amount, target and a progress bar. Met goals get a star. */
 @Composable
 fun NutrientRow(
     def: NutrientDef,
@@ -131,15 +154,18 @@ fun NutrientRow(
     val percent = pct(value, target)
     val overLimit = def.kind == TargetKind.LIMIT && target != null && value > target
     val overUl = upperLimit != null && value > upperLimit
+    val met = def.kind == TargetKind.GOAL && percent != null && percent >= 100 && !overUl
     val barColor = when {
         overLimit || overUl -> MaterialTheme.colorScheme.error
         else -> def.group.color()
     }
     Column(modifier.padding(vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(Emoji.nutrient(def.id), modifier = Modifier.width(28.dp), maxLines = 1)
             Text(
                 def.name,
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (met) FontWeight.Bold else null,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -155,31 +181,36 @@ fun NutrientRow(
             )
             if (percent != null && def.kind != TargetKind.NONE) {
                 Text(
-                    "$percent%",
+                    if (met) "⭐$percent%" else "$percent%",
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (overLimit || overUl) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.width(52.dp).padding(start = 8.dp),
+                    color = when {
+                        overLimit || overUl -> MaterialTheme.colorScheme.error
+                        met -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(64.dp),
                     maxLines = 1,
                 )
             }
         }
         if (def.kind != TargetKind.NONE && target != null && target > 0) {
             Spacer(Modifier.height(4.dp))
-            ProgressBar((value / target).toFloat(), barColor, Modifier.fillMaxWidth(), height = 6.dp)
+            ProgressBar((value / target).toFloat(), barColor, Modifier.fillMaxWidth().padding(start = 28.dp), height = 6.dp)
         }
         if (overUl) {
             Text(
                 "Above the upper limit of ${fmtAmount(upperLimit!!)} ${def.unit}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp, start = 28.dp),
             )
         } else if (overLimit) {
             Text(
                 "Over your daily limit",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp, start = 28.dp),
             )
         }
     }
@@ -212,13 +243,8 @@ fun NutrientBreakdown(
 @Composable
 fun GroupHeader(group: NutrientGroup) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-        Box(
-            Modifier
-                .size(10.dp)
-                .clip(RoundedCornerShape(50))
-                .background(group.color()),
-        )
-        Spacer(Modifier.width(8.dp))
+        EmojiTile(Emoji.group(group), group.color().copy(alpha = 0.22f), size = 32.dp)
+        Spacer(Modifier.width(10.dp))
         Text(group.title, style = MaterialTheme.typography.titleMedium)
     }
 }

@@ -86,6 +86,9 @@ interface DiaryDao {
     @Query("SELECT * FROM diary WHERE id = :id")
     suspend fun get(id: Long): DiaryEntry?
 
+    @Query("SELECT DISTINCT date FROM diary ORDER BY date DESC LIMIT 1000")
+    fun observeLoggedDates(): Flow<List<String>>
+
     @Query("SELECT * FROM diary WHERE id IN (SELECT MAX(id) FROM diary GROUP BY source, refId) ORDER BY loggedAt DESC LIMIT :limit")
     suspend fun recent(limit: Int): List<DiaryEntry>
 

@@ -42,6 +42,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,7 @@ import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.ui.theme.BigNumber
 import com.moblized.nutritrack.ui.theme.color
+import com.moblized.nutritrack.ui.theme.foodTileColor
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -81,6 +84,7 @@ fun FoodDetailScreen(
     var entryDate by remember { mutableStateOf(date) }
     var confirmDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(source, foodId, entryId) {
         val f = Graph.app.loadFood(source, foodId)
@@ -137,6 +141,7 @@ fun FoodDetailScreen(
                         onClick = {
                             qty?.let { q ->
                                 scope.launch {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     Graph.app.saveEntry(entryId, entryDate, meal, f, q, unit)
                                     onSaved()
                                 }
@@ -149,7 +154,10 @@ fun FoodDetailScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                             .height(52.dp),
                     ) {
-                        Text(if (entryId > 0) "Save changes" else "Add to ${Meals.name(meal)} · ${fmtKcal(nutrients[Nutrients.ENERGY] ?: 0.0)} kcal")
+                        Text(
+                            if (entryId > 0) "Save changes" else "${Emoji.meal(meal)} Add to ${Meals.name(meal)} · ${fmtKcal(nutrients[Nutrients.ENERGY] ?: 0.0)} kcal",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
                     }
                 }
             }
@@ -170,14 +178,21 @@ fun FoodDetailScreen(
                 ),
             ) {
                 item {
-                    Text(f.name, style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        f.detail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val category = if (f.source == FoodSource.USDA) f.detail.substringBefore(" · ") else null
+                        EmojiTile(Emoji.food(f.name, category, f.source), foodTileColor(f.name), size = 60.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column {
+                            Text(f.name, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                f.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(16.dp))
                 }
                 item {
@@ -207,7 +222,7 @@ fun FoodDetailScreen(
                     ChoiceRow(
                         options = Meals.names.indices.toList(),
                         selected = meal,
-                        label = { Meals.name(it) },
+                        label = { "${Emoji.meal(it)} ${Meals.name(it)}" },
                         onSelect = { meal = it },
                     )
                     Spacer(Modifier.height(12.dp))
@@ -226,9 +241,9 @@ fun FoodDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            MacroPill("Protein", nutrients[Nutrients.PROTEIN] ?: 0.0, NutrientGroup.PROTEIN, Modifier.weight(1f))
-                            MacroPill("Carbs", nutrients[Nutrients.CARBS] ?: 0.0, NutrientGroup.CARBS, Modifier.weight(1f))
-                            MacroPill("Fat", nutrients[Nutrients.FAT] ?: 0.0, NutrientGroup.LIPIDS, Modifier.weight(1f))
+                            MacroPill("💪 Protein", nutrients[Nutrients.PROTEIN] ?: 0.0, NutrientGroup.PROTEIN, Modifier.weight(1f))
+                            MacroPill("🍞 Carbs", nutrients[Nutrients.CARBS] ?: 0.0, NutrientGroup.CARBS, Modifier.weight(1f))
+                            MacroPill("🥑 Fat", nutrients[Nutrients.FAT] ?: 0.0, NutrientGroup.LIPIDS, Modifier.weight(1f))
                         }
                     }
                     Spacer(Modifier.height(16.dp))

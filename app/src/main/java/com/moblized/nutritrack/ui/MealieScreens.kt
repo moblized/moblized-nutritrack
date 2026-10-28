@@ -71,6 +71,7 @@ import com.moblized.nutritrack.data.Recipe
 import com.moblized.nutritrack.data.RecipeItem
 import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.data.sumNutrients
+import com.moblized.nutritrack.ui.theme.foodTileColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -144,6 +145,7 @@ fun MealieBrowseScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
                 items(results, key = { it.slug }) { r ->
                     ListItem(
                         modifier = Modifier.clickable { onOpen(r.slug) },
+                        leadingContent = { EmojiTile(Emoji.food(r.name, source = FoodSource.RECIPE), foodTileColor(r.name)) },
                         headlineContent = { Text(r.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
                             if (r.description.isNotBlank()) {

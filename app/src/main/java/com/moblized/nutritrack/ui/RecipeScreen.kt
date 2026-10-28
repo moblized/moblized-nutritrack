@@ -62,6 +62,7 @@ import com.moblized.nutritrack.data.Recipe
 import com.moblized.nutritrack.data.RecipeItem
 import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.data.sumNutrients
+import com.moblized.nutritrack.ui.theme.foodTileColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -176,6 +177,8 @@ fun RecipeScreen(
                         .clickable { editingIndex = index }
                         .padding(vertical = 6.dp),
                 ) {
+                    EmojiTile(Emoji.food(item.name, source = FoodSource.of(item.source)), foodTileColor(item.name), size = 36.dp)
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                         Text(

@@ -44,7 +44,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          ./gradlew --no-daemon testReleaseUnitTest assembleRelease 2>&1 | tee gradle.log
+          ./gradlew --no-daemon testDebugUnitTest assembleRelease 2>&1 | tee gradle.log
 
       - name: Test summary
         if: always()
@@ -53,14 +53,24 @@ jobs:
           import glob, xml.etree.ElementTree as ET
           total = fails = skipped = 0
           lines = []
-          for f in glob.glob("app/build/test-results/testReleaseUnitTest/*.xml"):
+          for f in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
               r = ET.parse(f).getroot()
               total += int(r.get("tests", 0)); fails += int(r.get("failures", 0)) + int(r.get("errors", 0)); skipped += int(r.get("skipped", 0))
               out = r.findtext("system-out") or ""
-              lines += [l for l in out.splitlines() if l.startswith(("MATCH", "MISMATCH"))]
+              lines += [l for l in out.splitlines() if l.startswith(("MISMATCH", "EMOJI", "SHOT"))]
           msg = f"{total} tests, {fails} failed, {skipped} skipped%0A" + "%0A".join(lines[:80])
           print(f"::notice title=Unit tests::{msg}")
           PY
+
+      - name: Publish UI screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls app/build/screenshots/*.png 2>/dev/null || exit 0
+          gh release view screenshots >/dev/null 2>&1 || \
+            gh release create screenshots --prerelease --title "UI screenshots" --notes "Rendered by CI from the latest build."
+          gh release upload screenshots app/build/screenshots/*.png --clobber
 
       - name: Report errors
         if: steps.db.outcome == 'failure' || steps.gradle.outcome == 'failure'

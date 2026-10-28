@@ -100,7 +100,7 @@ private fun Content(d: WidgetData) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "Today",
+            "🥗 Today",
             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp),
         )
         Text(
@@ -117,14 +117,14 @@ private fun Content(d: WidgetData) {
         )
         Spacer(GlanceModifier.height(8.dp))
         Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Macro("Protein", d.protein, GlanceModifier.defaultWeight())
-            Macro("Carbs", d.carbs, GlanceModifier.defaultWeight())
-            Macro("Fat", d.fat, GlanceModifier.defaultWeight())
+            Macro("💪 Protein", d.protein, GlanceModifier.defaultWeight())
+            Macro("🍞 Carbs", d.carbs, GlanceModifier.defaultWeight())
+            Macro("🥑 Fat", d.fat, GlanceModifier.defaultWeight())
         }
         if (d.low.isNotEmpty()) {
             Spacer(GlanceModifier.height(6.dp))
             Text(
-                "Low: " + d.low.joinToString("  ·  ") { "${it.first} ${it.second}%" },
+                "🎯 Low: " + d.low.joinToString("  ·  ") { "${it.first} ${it.second}%" },
                 style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp),
                 maxLines = 1,
             )

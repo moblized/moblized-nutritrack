@@ -30,9 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.moblized.nutritrack.data.FoodSource
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.Nutrients
+import com.moblized.nutritrack.ui.theme.foodTileColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,21 +50,22 @@ fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit, onIm
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = 24.dp),
         ) {
-            item { SectionTitle("Recipes", "New recipe") { onOpenRecipe(0) } }
+            item { SectionTitle("🍲 Recipes", "New recipe") { onOpenRecipe(0) } }
             if (onImportMealie != null) {
                 item {
                     androidx.compose.material3.TextButton(
                         onClick = onImportMealie,
                         modifier = Modifier.padding(horizontal = 8.dp),
-                    ) { Text("Import from Mealie") }
+                    ) { Text("🍲 Import from Mealie") }
                 }
             }
             if (recipes.isEmpty()) {
-                item { EmptyHint("Combine ingredients once, then log a serving in one tap.") }
+                item { EmptyHint("👩‍🍳 Combine ingredients once, then log a serving in one tap.") }
             }
             items(recipes, key = { "r${it.id}" }) { r ->
                 ListItem(
                     modifier = Modifier.clickable { onOpenRecipe(r.id) },
+                    leadingContent = { EmojiTile(Emoji.food(r.name, source = FoodSource.RECIPE), foodTileColor(r.name)) },
                     headlineContent = { Text(r.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = {
                         Text("${fmtQty(r.servings)} servings" + if (r.mealieSlug != null) " · from Mealie" else "")
@@ -70,14 +73,20 @@ fun FoodsScreen(onOpenRecipe: (Long) -> Unit, onOpenCustom: (Long) -> Unit, onIm
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
-            item { SectionTitle("Foods & scanned products", "New food") { onOpenCustom(0) } }
+            item { SectionTitle("🏷️ Foods & scans", "New food") { onOpenCustom(0) } }
             if (foods.isEmpty()) {
-                item { EmptyHint("Foods you scan or enter from a nutrition label show up here.") }
+                item { EmptyHint("📦 Foods you scan or enter from a nutrition label show up here.") }
             }
             items(foods, key = { "c${it.id}" }) { f ->
                 val kcal = NutrientCodec.decode(f.per100)[Nutrients.ENERGY]?.let { it * f.servingGrams / 100 }
                 ListItem(
                     modifier = Modifier.clickable { onOpenCustom(f.id) },
+                    leadingContent = {
+                        EmojiTile(
+                            if (f.barcode != null && Emoji.food(f.name) == "🍽️") "📦" else Emoji.food(f.name, source = FoodSource.CUSTOM),
+                            foodTileColor(f.name),
+                        )
+                    },
                     headlineContent = { Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     supportingContent = {
                         Text(

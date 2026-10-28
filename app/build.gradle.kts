@@ -53,7 +53,11 @@ android {
         abortOnError = false
     }
     testOptions {
+        unitTests.isIncludeAndroidResources = true
         unitTests.all {
+            // Screenshot tests write PNGs to app/build/screenshots.
+            it.systemProperty("roborazzi.test.record", "true")
+            it.maxHeapSize = "3g"
             it.testLogging {
                 events("failed")
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -88,4 +92,10 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.29.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.29.0")
+    testImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
