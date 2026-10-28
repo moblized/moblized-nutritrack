@@ -242,6 +242,10 @@ class IngredientMatcher(private val usda: FoodCandidateSource) {
         "pepper", "cheese", "bean", "oil", "lettuce", "cabbage", "mushroom", "chicken", "beef", "pork", "turkey", "lamb",
     )
     private val meats = setOf("chicken", "beef", "pork", "turkey", "lamb")
+    private val baseCategory = setOf(
+        "soup", "spice", "cereal", "beverage", "snack", "sauce", "candy", "babyfood", "restaurant", "fast food",
+        "alcoholic beverage", "nut", "seed", "fish", "leavening agent", "sweetener",
+    )
     private val forms = setOf(
         "oil", "butter", "flour", "milk", "juice", "paste", "powder", "extract", "syrup", "sauce", "spread", "meal",
         "cream", "dried", "dehydrated", "canned", "frozen", "cooked", "boiled", "baked", "roasted", "stewed",
@@ -498,7 +502,9 @@ class IngredientMatcher(private val usda: FoodCandidateSource) {
             if (!isMassOrVolume(lu.unit)) return Portion(portion.label, portion.grams / lu.amount) to false
         }
         if (unit == "can") return Portion("can (about 15 oz)", 425.0) to true
-        val prim = primaryWords(r.description.lowercase())
+        // Borrow a count portion from a similar food ("Squash, summer" for zucchini).
+        val segs = segments(r.description.lowercase())
+        val prim = if (segs.isEmpty()) emptyList() else if (segs[0].joinToString(" ") in baseCategory && segs.size > 1) segs[1] else segs[0]
         val searches = if (prim.isEmpty()) emptyList() else listOf(prim.joinToString(" ")) + prim
         for (t in searches) {
             for (other in runCatching { usda.candidates(t, 40) }.getOrDefault(emptyList())) {
