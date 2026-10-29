@@ -191,6 +191,17 @@ object Nutrients {
         ENERGY, FAT, SAT_FAT, TRANS_FAT, CHOLESTEROL, SODIUM, CARBS, FIBER, SUGARS,
         ADDED_SUGARS, PROTEIN, VIT_D, CALCIUM, IRON, POTASSIUM,
     )
+
+    /** The essentials: what a US Nutrition Facts label lists. All the app shows when detailed nutrition is off. */
+    val essentials: Set<Int> = labelFields.toSet()
+
+    /** Diary highlights when detailed nutrition is off. */
+    private val essentialHighlights = listOf(FIBER, VIT_D, CALCIUM, IRON, POTASSIUM)
+
+    /** Every nutrient (detailed) or just the label essentials, in display order. */
+    fun shown(detailed: Boolean): List<NutrientDef> = if (detailed) all else all.filter { it.id in essentials }
+
+    fun highlights(detailed: Boolean): List<Int> = if (detailed) highlights else essentialHighlights
 }
 
 object NutrientCodec {

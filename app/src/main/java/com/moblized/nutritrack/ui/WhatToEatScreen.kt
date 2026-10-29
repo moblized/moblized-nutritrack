@@ -101,14 +101,15 @@ fun WhatToEatContent(
 ) {
     val targets = remember(settings) { Targets.compute(settings) }
     val totals = remember(entries) { sumNutrients(entries.orEmpty().map { NutrientCodec.decode(it.nutrients) }) }
-    val gaps = remember(totals, targets) { Suggestions.gaps(totals, targets) }
+    val detailed = settings.detailedNutrition
+    val gaps = remember(totals, targets, detailed) { Suggestions.gaps(totals, targets, detailed) }
     val remaining = Suggestions.remainingKcal(totals, targets)
     val activeFocus = focus?.takeIf { f -> gaps.any { it.id == f } }
-    val ideas = remember(pool, totals, targets, activeFocus) {
-        pool?.let { Suggestions.rank(it, totals, targets, activeFocus, limit = 15) }
+    val ideas = remember(pool, totals, targets, activeFocus, detailed) {
+        pool?.let { Suggestions.rank(it, totals, targets, activeFocus, limit = 15, detailed = detailed) }
     }
-    val yours = remember(mine, totals, targets, activeFocus) {
-        Suggestions.rank(mine, totals, targets, activeFocus, limit = 5)
+    val yours = remember(mine, totals, targets, activeFocus, detailed) {
+        Suggestions.rank(mine, totals, targets, activeFocus, limit = 5, detailed = detailed)
     }
 
     Scaffold(

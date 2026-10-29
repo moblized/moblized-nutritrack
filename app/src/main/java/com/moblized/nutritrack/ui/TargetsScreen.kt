@@ -46,7 +46,7 @@ fun TargetsScreen(settings: Settings, onBack: () -> Unit) {
             settings.overrides.forEach { (id, v) -> put(id, fmtQty(v)) }
         }
     }
-    val editable = Nutrients.all.filter {
+    val editable = Nutrients.shown(settings.detailedNutrition).filter {
         it.kind != TargetKind.NONE && it.id != Nutrients.ENERGY && defaults[it.id] != null
     }
 

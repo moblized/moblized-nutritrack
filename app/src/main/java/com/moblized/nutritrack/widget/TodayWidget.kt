@@ -74,7 +74,7 @@ class TodayWidget : GlanceAppWidget() {
             Nutrients.POTASSIUM to "Potassium", Nutrients.MAGNESIUM to "Magnesium", Nutrients.CALCIUM to "Calcium",
             Nutrients.IRON to "Iron", Nutrients.VIT_B12 to "B12", Nutrients.FOLATE to "Folate", Nutrients.ZINC to "Zinc",
         )
-        val low = candidates.mapNotNull { (id, label) ->
+        val low = candidates.filter { settings.detailedNutrition || it.first in Nutrients.essentials }.mapNotNull { (id, label) ->
             val t = targets[id] ?: return@mapNotNull null
             if (Nutrients.byId[id]?.kind != TargetKind.GOAL || t <= 0) return@mapNotNull null
             label to ((totals[id] ?: 0.0) / t * 100).roundToInt()

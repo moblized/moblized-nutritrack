@@ -58,18 +58,19 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
     val uls = remember(settings) { Targets.upperLimits(settings) }
 
     // Low markers: a day once it's mostly over; averages over at least 3 logged days.
-    val lowIds = remember(totals, targets, range, date, loggedDays, settings.lowWarnings) {
+    val detailed = settings.detailedNutrition
+    val lowIds = remember(totals, targets, range, date, loggedDays, settings.lowWarnings, detailed) {
         when {
             !settings.lowWarnings || entries.isEmpty() -> emptySet()
             range == Range.DAY && LowNutrients.dayIsJudged(date, LocalDateTime.now()) ->
-                LowNutrients.below(totals, targets, LowNutrients.DAY_THRESHOLD).map { it.id }.toSet()
+                LowNutrients.below(totals, targets, LowNutrients.DAY_THRESHOLD, detailed).map { it.id }.toSet()
             range != Range.DAY && loggedDays >= LowNutrients.MIN_WEEK_DAYS ->
-                LowNutrients.below(totals, targets, LowNutrients.WEEK_THRESHOLD).map { it.id }.toSet()
+                LowNutrients.below(totals, targets, LowNutrients.WEEK_THRESHOLD, detailed).map { it.id }.toSet()
             else -> emptySet()
         }
     }
 
-    val goalDefs = Nutrients.all.filter { it.kind == TargetKind.GOAL && targets[it.id] != null }
+    val goalDefs = Nutrients.shown(detailed).filter { it.kind == TargetKind.GOAL && targets[it.id] != null }
     val met = goalDefs.count { (totals[it.id] ?: 0.0) >= (targets[it.id] ?: Double.MAX_VALUE) }
 
     Scaffold(
@@ -106,11 +107,13 @@ fun NutrientsScreen(date: LocalDate, onDateChange: (LocalDate) -> Unit, settings
                 NutrientBreakdown(
                     totals = totals, targets = targets, upperLimits = uls, hideEmptyInfo = false,
                     lowIds = lowIds, lowLabel = if (range == Range.DAY) "Running low" else "Low on average",
+                    detailed = detailed,
                 )
             }
             item {
                 Text(
-                    "Targets follow the US Dietary Reference Intakes for your age and sex. " +
+                    (if (detailed) "" else "Showing the essentials from a nutrition label. Turn on detailed nutrition in Settings for all ${Nutrients.all.size}. ") +
+                        "Targets follow the US Dietary Reference Intakes for your age and sex. " +
                         "A food missing a nutrient in USDA data counts as 0, so some totals may be underestimated.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -48,8 +48,16 @@ object LowNutrients {
     fun dayIsJudged(date: LocalDate, now: LocalDateTime): Boolean =
         date.isBefore(now.toLocalDate()) || (date == now.toLocalDate() && now.hour >= EVENING_HOUR)
 
-    fun below(totals: Map<Int, Double>, targets: Map<Int, Double>, threshold: Double): List<LowNutrient> =
-        watched.mapNotNull { id ->
+    /** What's watched in detailed mode, or just the label essentials (protein, fiber, vitamin D, ...). */
+    fun watched(detailed: Boolean): List<Int> = if (detailed) watched else watched.filter { it in Nutrients.essentials }
+
+    fun below(
+        totals: Map<Int, Double>,
+        targets: Map<Int, Double>,
+        threshold: Double,
+        detailed: Boolean = true,
+    ): List<LowNutrient> =
+        watched(detailed).mapNotNull { id ->
             val t = targets[id]?.takeIf { it > 0 } ?: return@mapNotNull null
             val frac = (totals[id] ?: 0.0) / t
             if (frac < threshold) LowNutrient(id, (frac * 100).roundToInt()) else null
@@ -65,9 +73,10 @@ object LowNutrients {
         dayEntries: List<DiaryEntry>,
         recentEntries: List<DiaryEntry>,
         targets: Map<Int, Double>,
+        detailed: Boolean = true,
     ): LowWarnings {
         val today = if (dayEntries.isNotEmpty() && dayIsJudged(date, now)) {
-            below(sumNutrients(dayEntries.map { NutrientCodec.decode(it.nutrients) }), targets, DAY_THRESHOLD)
+            below(sumNutrients(dayEntries.map { NutrientCodec.decode(it.nutrients) }), targets, DAY_THRESHOLD, detailed)
         } else {
             emptyList()
         }
@@ -75,7 +84,7 @@ object LowNutrients {
         val days = byDay.keys.sortedDescending().take(7)
         val week = if (days.size >= MIN_WEEK_DAYS) {
             val sum = sumNutrients(days.flatMap { d -> byDay.getValue(d).map { NutrientCodec.decode(it.nutrients) } })
-            below(sum.scaled(1.0 / days.size), targets, WEEK_THRESHOLD)
+            below(sum.scaled(1.0 / days.size), targets, WEEK_THRESHOLD, detailed)
         } else {
             emptyList()
         }

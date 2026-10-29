@@ -135,12 +135,12 @@ fun DiaryScreen(
         val list = loaded ?: return@LaunchedEffect
         val targets = Targets.compute(settings)
         val totals = sumNutrients(list.map { NutrientCodec.decode(it.nutrients) })
-        val met = Progress.goalsMet(totals, targets)
+        val met = Progress.goalsMet(totals, targets, settings.detailedNutrition)
         val newly = Progress.newlyMet(date.toString(), met)
         if (newly.isNotEmpty()) {
             confetti++
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            val allMet = met.containsAll(Progress.celebrated)
+            val allMet = met.containsAll(Progress.celebrated(settings.detailedNutrition))
             snackbar.showSnackbar(Progress.celebrationMessage(newly, allMet))
         }
     }
@@ -202,7 +202,7 @@ fun DiaryContent(
     val totals = remember(entries) { sumNutrients(entries.map { NutrientCodec.decode(it.nutrients) }) }
     val targets = remember(settings) { Targets.compute(settings) }
     val warnings = remember(entries, recentEntries, settings, date, now.hour) {
-        if (settings.lowWarnings) LowNutrients.warnings(date, now, entries, recentEntries, targets) else null
+        if (settings.lowWarnings) LowNutrients.warnings(date, now, entries, recentEntries, targets, settings.detailedNutrition) else null
     }
 
     // Always-visible shortcut: adds to the meal for the time of day (switchable on the food screen).
@@ -266,11 +266,15 @@ fun DiaryContent(
                 item { MealPlanCard(plan, planError, onOpenMealPlan) }
             }
             if (entries.isNotEmpty() && (warnings == null || warnings.isEmpty)) {
-                boostTarget(totals, targets)?.let { (id, percent) ->
+                boostTarget(totals, targets, settings.detailedNutrition)?.let { (id, percent) ->
                     item(key = "boost") { BoostCard(id, percent, onSuggest, onWhatToEat) }
                 }
             }
-            item { HighlightsCard(totals, targets, warnings?.today?.map { it.id }?.toSet().orEmpty(), onShowNutrients) }
+            item {
+                HighlightsCard(
+                    totals, targets, warnings?.today?.map { it.id }?.toSet().orEmpty(), settings.detailedNutrition, onShowNutrients,
+                )
+            }
             Meals.names.indices.forEach { meal ->
                 item(key = "meal-$meal") {
                     MealCard(
@@ -406,8 +410,8 @@ private fun Stat(label: String, value: String) {
 }
 
 /** The key nutrient furthest from its goal (under 60%), if there's a food tip for it. */
-private fun boostTarget(totals: Map<Int, Double>, targets: Map<Int, Double>): Pair<Int, Int>? =
-    Progress.celebrated
+private fun boostTarget(totals: Map<Int, Double>, targets: Map<Int, Double>, detailed: Boolean): Pair<Int, Int>? =
+    Progress.celebrated(detailed)
         .filter { Nutrients.byId[it]?.kind == TargetKind.GOAL && Emoji.boosters(it).isNotEmpty() }
         .mapNotNull { id -> targets[id]?.takeIf { it > 0 }?.let { id to ((totals[id] ?: 0.0) / it * 100).toInt() } }
         .filter { it.second < 60 }
@@ -555,22 +559,29 @@ private fun MealPlanCard(plan: List<MealiePlanEntry>, error: String?, onOpen: (M
 }
 
 @Composable
-private fun HighlightsCard(totals: Map<Int, Double>, targets: Map<Int, Double>, lowIds: Set<Int>, onShowAll: () -> Unit) {
-    val met = Nutrients.highlights.count { id -> targets[id]?.let { t -> t > 0 && (totals[id] ?: 0.0) >= t } == true }
+private fun HighlightsCard(
+    totals: Map<Int, Double>,
+    targets: Map<Int, Double>,
+    lowIds: Set<Int>,
+    detailed: Boolean,
+    onShowAll: () -> Unit,
+) {
+    val highlights = Nutrients.highlights(detailed)
+    val met = highlights.count { id -> targets[id]?.let { t -> t > 0 && (totals[id] ?: 0.0) >= t } == true }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("✨ Key nutrients", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "$met of ${Nutrients.highlights.size} goals hit",
+                        "$met of ${highlights.size} goals hit",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onShowAll) { Text("All ${Nutrients.all.size}") }
+                TextButton(onClick = onShowAll) { Text("All ${Nutrients.shown(detailed).size}") }
             }
-            Nutrients.highlights.mapNotNull { Nutrients.byId[it] }.forEach { def ->
+            highlights.mapNotNull { Nutrients.byId[it] }.forEach { def ->
                 NutrientRow(def, totals[def.id] ?: 0.0, targets[def.id], null, low = def.id in lowIds)
             }
         }

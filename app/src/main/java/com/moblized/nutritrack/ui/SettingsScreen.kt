@@ -57,6 +57,7 @@ import com.moblized.nutritrack.data.Activity
 import com.moblized.nutritrack.data.Goal
 import com.moblized.nutritrack.data.MealieClient
 import com.moblized.nutritrack.data.MealieException
+import com.moblized.nutritrack.data.Nutrients
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Profile
 import com.moblized.nutritrack.data.Settings
@@ -283,6 +284,25 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                     modifier = Modifier.clickable(onClick = onOpenTargets),
                 )
+            }
+
+            item { Section("🔬 Nutrition detail") }
+            item {
+                SwitchLine(
+                    title = "Super detailed nutrition",
+                    subtitle = if (settings.detailedNutrition) {
+                        "On: all ${Nutrients.all.size} nutrients, including every vitamin, mineral, amino acid and fat"
+                    } else {
+                        "Off: just the ${Nutrients.essentials.size} essentials from a nutrition label: calories, fats, " +
+                            "cholesterol, sodium, carbs, fiber, sugars, protein, vitamin D, calcium, iron and potassium"
+                    },
+                    checked = settings.detailedNutrition,
+                ) { on ->
+                    scope.launch {
+                        repo.setDetailedNutrition(on)
+                        Graph.app.refreshWidget()
+                    }
+                }
             }
 
             item { Section("🎨 Appearance") }

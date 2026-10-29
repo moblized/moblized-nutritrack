@@ -237,10 +237,12 @@ fun NutrientBreakdown(
     hideEmptyInfo: Boolean = true,
     lowIds: Set<Int> = emptySet(),
     lowLabel: String = "Running low",
+    /** False shows only the label essentials (calories, fats, carbs, protein, sodium, D, calcium, iron, potassium). */
+    detailed: Boolean = true,
 ) {
     Column(modifier) {
         NutrientGroup.entries.forEach { group ->
-            val defs = Nutrients.all.filter { it.group == group }
+            val defs = Nutrients.shown(detailed).filter { it.group == group }
                 .filter { !(hideEmptyInfo && it.kind == TargetKind.NONE && (totals[it.id] ?: 0.0) == 0.0) }
             if (defs.isNotEmpty()) {
                 GroupHeader(group)

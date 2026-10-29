@@ -185,6 +185,22 @@ class ScreenshotTest {
         }
     }
 
+    /** Essentials mode: the diary highlights and the nutrient list keep to the label nutrients. */
+    @Test
+    @Config(qualifiers = "w412dp-h2400dp-xhdpi")
+    fun essentials() {
+        val day = sampleDay()
+        val simple = settings.copy(detailedNutrition = false)
+        val totals = sumNutrients(day.map { NutrientCodec.decode(it.nutrients) })
+        val targets = Targets.compute(simple)
+        shoot("13_essentials") {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                TargetsMetCard(met = 4, total = 7, subtitle = "1,480 kcal from 7 foods")
+                NutrientBreakdown(totals, targets, Targets.upperLimits(simple), hideEmptyInfo = false, detailed = false)
+            }
+        }
+    }
+
     @Test
     fun searchResults() {
         fun usda(name: String, category: String, kcal: Double) =

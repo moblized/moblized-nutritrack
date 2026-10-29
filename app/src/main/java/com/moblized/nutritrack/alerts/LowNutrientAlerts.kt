@@ -128,7 +128,9 @@ class LowNutrientWorker(context: Context, params: WorkerParameters) : CoroutineW
             val dayEntries = app.db.diary().day(today.toString())
             val recent = app.db.diary().range(today.minusDays(30).toString(), today.toString())
             // The person picked this time, so judge the day now even if it's before the usual evening cutoff.
-            val w = LowNutrients.warnings(today, today.atTime(23, 59), dayEntries, recent, Targets.compute(settings))
+            val w = LowNutrients.warnings(
+                today, today.atTime(23, 59), dayEntries, recent, Targets.compute(settings), settings.detailedNutrition,
+            )
             // The weekly average is only mentioned on Sundays so it doesn't repeat every night.
             val msg = LowNutrientAlerts.message(w, includeWeek = today.dayOfWeek == DayOfWeek.SUNDAY)
             if (msg != null) LowNutrientAlerts.post(applicationContext, msg.first, msg.second)

@@ -133,6 +133,23 @@ class LowNutrientsTest {
     }
 
     @Test
+    fun essentialsModeOnlyWatchesLabelNutrients() {
+        val ids = com.moblized.nutritrack.data.Nutrients
+        assertEquals(15, ids.shown(false).size)
+        assertEquals(ids.all.size, ids.shown(true).size)
+        assertTrue(ids.highlights(false).all { it in ids.essentials })
+        val date = LocalDate.of(2026, 10, 28)
+        val withC = targets + (ids.VIT_C to 90.0)
+        val day = listOf(entry("2026-10-28", vitD = 3.0, fiber = 30.0))
+        // Vitamin C is at 0% but isn't on a nutrition label, so essentials mode leaves it out.
+        val detailed = com.moblized.nutritrack.data.LowNutrients.warnings(date, date.atTime(19, 0), day, emptyList(), withC, detailed = true)
+        val simple = com.moblized.nutritrack.data.LowNutrients.warnings(date, date.atTime(19, 0), day, emptyList(), withC, detailed = false)
+        assertTrue(detailed.today.any { it.id == ids.VIT_C })
+        assertEquals(listOf(ids.VIT_D), simple.today.map { it.id })
+        assertTrue(com.moblized.nutritrack.data.Suggestions.goals(false).all { it in ids.essentials })
+    }
+
+    @Test
     fun writesANotification() {
         val w = com.moblized.nutritrack.data.LowWarnings(
             today = listOf(com.moblized.nutritrack.data.LowNutrient(com.moblized.nutritrack.data.Nutrients.VIT_D, 13)),

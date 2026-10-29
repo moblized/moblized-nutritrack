@@ -261,7 +261,7 @@ fun FoodDetailScreen(
                     )
                 }
                 item {
-                    NutrientBreakdown(totals = nutrients, targets = targets, upperLimits = uls)
+                    NutrientBreakdown(totals = nutrients, targets = targets, upperLimits = uls, detailed = settings.detailedNutrition)
                 }
             }
         }

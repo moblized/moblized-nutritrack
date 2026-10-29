@@ -51,13 +51,16 @@ data class Gap(val id: Int, val fraction: Double) {
  */
 object Suggestions {
     val goals: List<Int> = LowNutrients.watched - Nutrients.ENERGY
+
+    /** Gaps worth filling: every watched nutrient, or only the label essentials when detail is off. */
+    fun goals(detailed: Boolean): List<Int> = if (detailed) goals else goals.filter { it in Nutrients.essentials }
     private val limits = listOf(Nutrients.SODIUM, Nutrients.SAT_FAT, Nutrients.ADDED_SUGARS)
 
     /** Remaining kcal at or below which only light foods (up to [LIGHT_KCAL]) are suggested. */
     const val LIGHT_KCAL = 150.0
 
-    fun gaps(totals: Map<Int, Double>, targets: Map<Int, Double>): List<Gap> =
-        goals.mapNotNull { id ->
+    fun gaps(totals: Map<Int, Double>, targets: Map<Int, Double>, detailed: Boolean = true): List<Gap> =
+        goals(detailed).mapNotNull { id ->
             val t = targets[id]?.takeIf { it > 0 } ?: return@mapNotNull null
             val f = max(0.0, t - (totals[id] ?: 0.0)) / t
             if (f > 0.02) Gap(id, f) else null
@@ -72,6 +75,7 @@ object Suggestions {
         targets: Map<Int, Double>,
         focus: Int?,
         remaining: Double,
+        detailed: Boolean = true,
     ): Suggestion? {
         val kcal = c.kcal
         if (remaining > LIGHT_KCAL) {
@@ -81,7 +85,7 @@ object Suggestions {
         }
         var benefit = 0.0
         val gains = ArrayList<Pair<Int, Int>>()
-        for (id in goals) {
+        for (id in goals(detailed)) {
             val t = targets[id]?.takeIf { it > 0 } ?: continue
             val need = max(0.0, t - (totals[id] ?: 0.0))
             if (need <= 0) continue
@@ -119,9 +123,10 @@ object Suggestions {
         focus: Int? = null,
         limit: Int = 15,
         groupCap: Int = if (focus == null) 3 else 5,
+        detailed: Boolean = true,
     ): List<Suggestion> {
         val remaining = remainingKcal(totals, targets)
-        val scored = candidates.mapNotNull { score(it, totals, targets, focus, remaining) }.sortedByDescending { it.score }
+        val scored = candidates.mapNotNull { score(it, totals, targets, focus, remaining, detailed) }.sortedByDescending { it.score }
         val families = HashSet<String>()
         val perGroup = HashMap<FoodGroup, Int>()
         val out = ArrayList<Suggestion>()

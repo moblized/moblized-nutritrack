@@ -20,8 +20,10 @@ object Progress {
     /** Nutrients that can earn a celebration: protein plus the diary's key nutrients. */
     val celebrated: List<Int> = listOf(Nutrients.PROTEIN) + Nutrients.highlights
 
-    fun goalsMet(totals: Map<Int, Double>, targets: Map<Int, Double>): Set<Int> =
-        celebrated.filter { id ->
+    fun celebrated(detailed: Boolean): List<Int> = listOf(Nutrients.PROTEIN) + Nutrients.highlights(detailed)
+
+    fun goalsMet(totals: Map<Int, Double>, targets: Map<Int, Double>, detailed: Boolean = true): Set<Int> =
+        celebrated(detailed).filter { id ->
             val t = targets[id]
             t != null && t > 0 && (totals[id] ?: 0.0) >= t
         }.toSet()
