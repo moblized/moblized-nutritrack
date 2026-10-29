@@ -13,8 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.moblized.nutritrack.data.DiaryEntry
@@ -137,6 +139,32 @@ class ScreenshotTest {
     fun diaryDarkPureBlack() {
         val day = sampleDay()
         shoot("2_diary_dark", dark = true, pureBlack = true) { diary(day, settings, streak = 6, withPlan = false) }
+    }
+
+    /** Phone-sized: the "Add to Lunch" button sits over the list at lunchtime... */
+    @Test
+    @Config(qualifiers = "w412dp-h915dp-xhdpi")
+    fun diaryAddButton() {
+        val day = sampleDay()
+        shoot("11_diary_add_button") { diary(day, settings, streak = 6, withPlan = true, hour = 12) }
+    }
+
+    /** ...and shrinks to a + once you scroll down to the meals. */
+    @Test
+    @Config(qualifiers = "w412dp-h915dp-xhdpi")
+    fun diaryAddButtonScrolled() {
+        val day = sampleDay()
+        compose.setContent {
+            NutriTheme(dark = false, pureBlack = false) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    diary(day, settings, streak = 6, withPlan = true, hour = 12)
+                }
+            }
+        }
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(5)
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/screenshots/12_diary_add_button_scrolled.png")
+        println("SHOT 12_diary_add_button_scrolled")
     }
 
     @Test
