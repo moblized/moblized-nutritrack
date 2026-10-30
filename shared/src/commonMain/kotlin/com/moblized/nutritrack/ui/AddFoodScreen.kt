@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,12 +74,14 @@ fun AddFoodScreen(
     onOpenFood: (FoodSource, Long) -> Unit,
     onCreateFood: (String?) -> Unit,
     onCreateRecipe: () -> Unit,
+    onReceipt: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf(initialQuery) }
     var results by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var recent by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var lookingUp by remember { mutableStateOf(false) }
+    var readingReceipt by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
@@ -135,6 +140,20 @@ fun AddFoodScreen(
         scanner?.invoke() ?: scope.launch { snackbar.showSnackbar("Barcode scanning isn't available on this phone") }
     }
 
+    // Android only for now: photograph a receipt and log what's on it.
+    val receiptScanner = Graph.app.platform.rememberReceiptScanner(
+        onReading = { readingReceipt = true },
+        onLines = { lines ->
+            readingReceipt = false
+            ReceiptDraft.lines = lines
+            onReceipt()
+        },
+        onError = { msg ->
+            readingReceipt = false
+            scope.launch { snackbar.showSnackbar("Couldn't read the receipt: $msg") }
+        },
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -181,13 +200,22 @@ fun AddFoodScreen(
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 AssistChip(
                     onClick = { scan() },
                     label = { Text("Scan") },
                     leadingIcon = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
                 )
+                if (receiptScanner != null) {
+                    AssistChip(
+                        onClick = { receiptScanner() },
+                        label = { Text("Receipt") },
+                        leadingIcon = { Icon(Icons.Filled.Receipt, contentDescription = null) },
+                    )
+                }
                 AssistChip(
                     onClick = { onCreateFood(null) },
                     label = { Text("New food") },
@@ -199,14 +227,17 @@ fun AddFoodScreen(
                     leadingIcon = { Icon(Icons.Filled.Kitchen, contentDescription = null) },
                 )
             }
-            if (searching || lookingUp) {
+            if (searching || lookingUp || readingReceipt) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
-            if (lookingUp) {
+            if (lookingUp || readingReceipt) {
                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
-                        Text("Looking up barcode…", modifier = Modifier.padding(top = 12.dp))
+                        Text(
+                            if (readingReceipt) "Reading the receipt…" else "Looking up barcode…",
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
                     }
                 }
             }
@@ -215,7 +246,7 @@ fun AddFoodScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                if (query.isBlank() && recent.isEmpty() && !lookingUp) {
+                if (query.isBlank() && recent.isEmpty() && !lookingUp && !readingReceipt) {
                     item {
                         Column(
                             Modifier.fillMaxWidth().padding(32.dp),

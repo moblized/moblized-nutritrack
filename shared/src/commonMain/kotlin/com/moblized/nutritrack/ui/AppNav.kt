@@ -68,6 +68,7 @@ object Routes {
     fun custom(id: Long, barcode: String? = null) =
         "custom/$id" + (barcode?.let { "?barcode=" + urlEncode(it) } ?: "")
     fun recipe(id: Long) = "recipe/$id"
+    fun receipt(date: LocalDate, meal: Int) = "receipt/$date/$meal"
     const val TARGETS = "targets"
     const val MEALIE = "mealie"
     fun mealieImport(slug: String, date: LocalDate?, meal: Int) =
@@ -182,6 +183,27 @@ fun AppNav(settings: Settings, startRoute: String = "diary") {
                         onOpenFood = { source, id -> nav.navigate(Routes.food(source, id, d, meal)) },
                         onCreateFood = { barcode -> nav.navigate(Routes.custom(0, barcode)) },
                         onCreateRecipe = { nav.navigate(Routes.recipe(0)) },
+                        onReceipt = { nav.navigate(Routes.receipt(d, meal)) },
+                    )
+                }
+                composable(
+                    "receipt/{date}/{meal}",
+                    arguments = listOf(
+                        navArgument("date") { type = NavType.StringType },
+                        navArgument("meal") { type = NavType.IntType },
+                    ),
+                ) { entry ->
+                    val d = LocalDate.parse(entry.str("date") ?: LocalDate.now().toString())
+                    val meal = entry.int("meal") ?: 0
+                    ReceiptScreen(
+                        date = d,
+                        meal = meal,
+                        onBack = { nav.popBackStack() },
+                        onLogged = {
+                            setDate(d)
+                            // Back to the diary, where the receipt's food now is.
+                            nav.popBackStack("diary", inclusive = false)
+                        },
                     )
                 }
                 composable(

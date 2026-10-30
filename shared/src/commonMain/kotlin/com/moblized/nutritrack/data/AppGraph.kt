@@ -118,8 +118,36 @@ class AppGraph(
         } else {
             db.diary().insert(entry)
         }
-        afterDiaryChange(syncEntry = entry.copy(id = id))
+        afterDiaryChange(syncEntries = listOf(entry.copy(id = id)))
         return id
+    }
+
+    /** Logs several foods to one meal at once (the items on a scanned receipt). */
+    suspend fun logItems(date: LocalDate, meal: Int, items: List<RecipeItem>): Int {
+        val now = nowMillis()
+        val saved = items.mapIndexed { i, it ->
+            val entry = DiaryEntry(
+                date = date.toString(),
+                meal = meal,
+                loggedAt = now + i, // keeps the receipt's order in the diary
+                source = it.source,
+                refId = it.refId,
+                name = it.name,
+                quantity = it.quantity,
+                unitLabel = it.unitLabel,
+                unitGrams = it.unitGrams,
+                grams = it.grams,
+                nutrients = NutrientCodec.encode(NutrientCodec.decode(it.per100).scaled(it.grams / 100.0)),
+            )
+            entry.copy(id = db.diary().insert(entry))
+        }
+        afterDiaryChange(syncEntries = saved)
+        return saved.size
+    }
+
+    /** The user's own foods and recipes, which a receipt line can match by name. */
+    suspend fun personalFoods(): List<Food> = withContext(Dispatchers.IO) {
+        db.customFoods().all().map { it.toFood() } + db.recipes().all().map { recipeFood(it) }
     }
 
     suspend fun deleteEntry(id: Long) {
@@ -127,11 +155,11 @@ class AppGraph(
         afterDiaryChange(deletedId = id)
     }
 
-    private fun afterDiaryChange(syncEntry: DiaryEntry? = null, deletedId: Long? = null) {
+    private fun afterDiaryChange(syncEntries: List<DiaryEntry> = emptyList(), deletedId: Long? = null) {
         scope.launch {
             runCatching { platform.refreshWidget() }
             if (settings.current().healthConnect) {
-                syncEntry?.let { health.upsert(listOf(it)) }
+                if (syncEntries.isNotEmpty()) health.upsert(syncEntries)
                 deletedId?.let { health.delete(it) }
             }
         }

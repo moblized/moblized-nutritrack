@@ -262,8 +262,14 @@ private fun SummaryStat(label: String, value: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun IngredientPicker(excludeRecipeId: Long, onDismiss: () -> Unit, onPicked: (RecipeItem) -> Unit) {
-    var query by remember { mutableStateOf("") }
+internal fun IngredientPicker(
+    excludeRecipeId: Long,
+    onDismiss: () -> Unit,
+    onPicked: (RecipeItem) -> Unit,
+    title: String = "Add ingredient",
+    initialQuery: String = "",
+) {
+    var query by remember { mutableStateOf(initialQuery) }
     var results by remember { mutableStateOf<List<FoodSummary>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<FoodSummary?>(null) }
@@ -284,7 +290,7 @@ internal fun IngredientPicker(excludeRecipeId: Long, onDismiss: () -> Unit, onPi
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Add ingredient") },
+                        title = { Text(title) },
                         navigationIcon = {
                             IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Close") }
                         },

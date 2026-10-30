@@ -31,6 +31,17 @@ interface PlatformServices {
     @Composable
     fun rememberBarcodeScanner(onCode: (String) -> Unit, onError: (String) -> Unit): (() -> Unit)? = null
 
+    /**
+     * Returns a function that photographs a receipt (or picks a screenshot of one) and reads its text,
+     * or null where receipt scanning isn't available.
+     */
+    @Composable
+    fun rememberReceiptScanner(
+        onReading: () -> Unit,
+        onLines: (List<OcrLine>) -> Unit,
+        onError: (String) -> Unit,
+    ): (() -> Unit)? = null
+
     /** Returns a function that asks to show notifications (when needed) and reports whether it may. */
     @Composable
     fun rememberNotificationPermission(onResult: (Boolean) -> Unit): () -> Unit = { onResult(true) }

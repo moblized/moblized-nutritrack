@@ -12,7 +12,7 @@ import kotlin.math.abs
 import kotlin.math.max
 
 /** Reads the same bundled database the app uses, through JDBC instead of Android's SQLite. */
-private class JdbcSource(private val conn: Connection) : FoodCandidateSource {
+internal class JdbcSource(private val conn: Connection) : FoodCandidateSource {
     override fun candidates(query: String, limit: Int): List<UsdaDatabase.Candidate> {
         val tokens = query.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()

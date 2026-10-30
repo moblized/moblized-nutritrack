@@ -85,7 +85,7 @@ jobs:
               r = ET.parse(f).getroot()
               total += int(r.get("tests", 0)); fails += int(r.get("failures", 0)) + int(r.get("errors", 0)); skipped += int(r.get("skipped", 0))
               out = r.findtext("system-out") or ""
-              lines += [l for l in out.splitlines() if l.startswith(("MISMATCH", "EMOJI", "SHOT", "SUGGEST"))]
+              lines += [l for l in out.splitlines() if l.startswith(("MISMATCH", "EMOJI", "SHOT", "SUGGEST", "RECEIPT"))]
           msg = f"{total} tests, {fails} failed, {skipped} skipped%0A" + "%0A".join(lines[:160])
           print(f"::notice title=Unit tests::{msg}")
           PY

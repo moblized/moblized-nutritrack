@@ -22,9 +22,12 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.moblized.nutritrack.data.DiaryEntry
 import com.moblized.nutritrack.data.FoodSource
 import com.moblized.nutritrack.data.FoodSummary
+import com.moblized.nutritrack.data.JdbcSource
 import com.moblized.nutritrack.data.MealiePlanEntry
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.Profile
+import com.moblized.nutritrack.data.ReceiptMatcher
+import com.moblized.nutritrack.data.ReceiptParser
 import com.moblized.nutritrack.data.Settings
 import com.moblized.nutritrack.data.Sex
 import com.moblized.nutritrack.data.Targets
@@ -301,6 +304,33 @@ class ScreenshotTest {
                 pool = pool, mine = emptyList(), focus = com.moblized.nutritrack.data.Nutrients.VIT_D,
                 onFocus = {}, onAdd = {},
             )
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h1400dp-xhdpi")
+    fun receiptReview() {
+        val db = listOf("src/main/assets/usda.db", "app/src/main/assets/usda.db").map(::File).firstOrNull { it.exists() }
+        Assume.assumeTrue("usda.db has not been built", db != null)
+        org.sqlite.JDBC().connect("jdbc:sqlite:" + db!!.absolutePath, java.util.Properties())!!.use { conn ->
+            // Rows as the phone reads them: names on the left, prices on the right.
+            val receipt = ReceiptParser.parse(
+                listOf(
+                    "McDonald's", "Order 47", "1 Big Mac 5.99", "1 M French Fries 3.29", "2 L Coke 4.38",
+                    "1 6 McNuggets 4.49", "Sweet N Sour", "1 Snack Wrap 2.99", "Subtotal 21.14", "Tax 1.69",
+                    "Take-Out Total 22.83", "VISA ************1234 22.83",
+                ),
+            )
+            val matcher = ReceiptMatcher(JdbcSource(conn))
+            val rows = receipt.items.flatMap { receiptRows(it, matcher.match(it, receipt.store, receipt.mexican)) }
+            shoot("15_receipt_review") {
+                ReceiptReview(
+                    date = LocalDate.now(), meal = 1, loaded = true, itemCount = receipt.items.size,
+                    matched = receipt.items.size, matching = false, rows = rows, skipped = receipt.skipped,
+                    saving = false, onBack = {}, onToggle = { _, _ -> }, onEdit = {}, onChangeFood = {},
+                    onAddSkipped = {}, onLog = {},
+                )
+            }
         }
     }
 
