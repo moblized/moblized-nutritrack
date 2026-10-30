@@ -36,7 +36,9 @@ import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.sumNutrients
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
+import com.moblized.nutritrack.data.now
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -86,7 +88,7 @@ class TodayWidget : GlanceAppWidget() {
             carbs = totals[Nutrients.CARBS] ?: 0.0,
             fat = totals[Nutrients.FAT] ?: 0.0,
             low = low,
-            warn = LowNutrients.dayIsJudged(LocalDate.now(), java.time.LocalDateTime.now()) &&
+            warn = LowNutrients.dayIsJudged(LocalDate.now(), LocalDateTime.now()) &&
                 low.any { it.second < (LowNutrients.DAY_THRESHOLD * 100).toInt() },
         )
     }

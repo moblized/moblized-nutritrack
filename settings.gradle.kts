@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "NutriTrack"
 include(":app")
+include(":shared")

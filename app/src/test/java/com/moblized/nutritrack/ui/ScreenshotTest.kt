@@ -39,7 +39,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
-import java.time.LocalDate
+import com.moblized.nutritrack.data.minusDays
+import com.moblized.nutritrack.data.now
+import kotlinx.datetime.LocalDate
 
 /** Renders the main screens with realistic data so the look can be checked without a phone. */
 @RunWith(RobolectricTestRunner::class)

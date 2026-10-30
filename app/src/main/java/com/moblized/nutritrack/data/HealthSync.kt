@@ -18,20 +18,22 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 /** Writes diary entries to Health Connect (which Samsung Health can read) and reads scale weigh-ins. */
-class HealthSync(private val context: Context) {
+class HealthSync(private val context: Context) : HealthService {
 
     val permissions: Set<String> = setOf(HealthPermission.getWritePermission(NutritionRecord::class))
 
-    fun isAvailable(): Boolean =
+    fun available(): Boolean =
         HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE
+
+    override suspend fun isAvailable(): Boolean = available()
 
     private fun client(): HealthConnectClient = HealthConnectClient.getOrCreate(context)
 
-    suspend fun hasPermission(): Boolean = isAvailable() && runCatching {
+    suspend fun hasPermission(): Boolean = available() && runCatching {
         client().permissionController.getGrantedPermissions().containsAll(permissions)
     }.getOrDefault(false)
 
-    suspend fun upsert(entries: List<DiaryEntry>): Int {
+    override suspend fun upsert(entries: List<DiaryEntry>): Int {
         if (entries.isEmpty() || !hasPermission()) return 0
         return runCatching {
             entries.chunked(500).forEach { batch -> client().insertRecords(batch.map(::toRecord)) }
@@ -39,7 +41,7 @@ class HealthSync(private val context: Context) {
         }.getOrDefault(0)
     }
 
-    suspend fun delete(entryId: Long) {
+    override suspend fun delete(entryId: Long) {
         if (!hasPermission()) return
         runCatching {
             client().deleteRecords(
@@ -56,14 +58,12 @@ class HealthSync(private val context: Context) {
 
     val weightPermissions: Set<String> = setOf(HealthPermission.getReadPermission(WeightRecord::class))
 
-    suspend fun hasWeightPermission(): Boolean = isAvailable() && runCatching {
+    suspend fun hasWeightPermission(): Boolean = available() && runCatching {
         client().permissionController.getGrantedPermissions().containsAll(weightPermissions)
     }.getOrDefault(false)
 
-    data class WeighIn(val kg: Double, val time: Instant, val sourcePackage: String)
-
     /** The most recent weight any app (e.g. a smart-scale app) saved to Health Connect in the last 30 days. */
-    suspend fun latestWeighIn(): WeighIn? {
+    override suspend fun latestWeighIn(): WeighIn? {
         if (!hasWeightPermission()) return null
         return runCatching {
             val response = client().readRecords(
@@ -75,7 +75,7 @@ class HealthSync(private val context: Context) {
                 ),
             )
             response.records.firstOrNull()?.let {
-                WeighIn(it.weight.inKilograms, it.time, it.metadata.dataOrigin.packageName)
+                WeighIn(it.weight.inKilograms, it.time.toEpochMilli(), it.metadata.dataOrigin.packageName)
             }
         }.getOrNull()
     }

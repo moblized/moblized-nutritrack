@@ -22,10 +22,11 @@ import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.LowNutrients
 import com.moblized.nutritrack.data.LowWarnings
 import com.moblized.nutritrack.data.Targets
+import com.moblized.nutritrack.data.minusDays
+import com.moblized.nutritrack.data.now
 import com.moblized.nutritrack.ui.Emoji
 import java.time.DayOfWeek
 import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 
@@ -124,7 +125,7 @@ class LowNutrientWorker(context: Context, params: WorkerParameters) : CoroutineW
         val settings = app.settings.current()
         if (!settings.lowNotify) return Result.success()
         try {
-            val today = LocalDate.now()
+            val today = kotlinx.datetime.LocalDate.now()
             val dayEntries = app.db.diary().day(today.toString())
             val recent = app.db.diary().range(today.minusDays(30).toString(), today.toString())
             // The person picked this time, so judge the day now even if it's before the usual evening cutoff.

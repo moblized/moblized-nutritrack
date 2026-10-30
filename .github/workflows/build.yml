@@ -2,22 +2,18 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, ios]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  db:
+    # The offline USDA food database, shared by the Android and iPhone builds.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - uses: actions/setup-python@v5
         with:
@@ -35,7 +31,39 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          python3 tools/build_food_db.py --out app/src/main/assets/usda.db --cache tools/cache 2>&1 | tee db.log
+          python3 tools/build_food_db.py --out out/usda.db --cache tools/cache 2>&1 | tee db.log
+
+      - name: Report errors
+        if: steps.db.outcome == 'failure'
+        run: |
+          python3 tools/ci_report.py db.log
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usda-db
+          path: out/usda.db
+          retention-days: 3
+
+  build:
+    needs: db
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: usda-db
+          path: app/src/main/assets
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -73,9 +101,9 @@ jobs:
           gh release upload screenshots app/build/screenshots/*.png --clobber
 
       - name: Report errors
-        if: steps.db.outcome == 'failure' || steps.gradle.outcome == 'failure'
+        if: steps.gradle.outcome == 'failure'
         run: |
-          python3 tools/ci_report.py db.log gradle.log
+          python3 tools/ci_report.py gradle.log
           exit 1
 
       - name: Rename APK
@@ -88,15 +116,219 @@ jobs:
           name: NutriTrack-apk
           path: out/*.apk
 
+  ios:
+    # Builds the iPhone app from the same shared code: an unsigned .ipa for SideStore, plus simulator screenshots.
+    needs: db
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: usda-db
+          path: iosApp/NutriTrack
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('build.gradle.kts') }}
+
+      - name: Tools
+        run: |
+          xcodebuild -version
+          brew install xcodegen >/dev/null 2>&1 || true
+          xcodegen --version
+
+      - name: Compile shared code for iPhone
+        id: kotlin
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosSimulatorArm64 2>&1 | tee kotlin-ios.log
+
+      - name: Build unsigned IPA
+        id: device
+        if: steps.kotlin.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cd iosApp && xcodegen generate && cd ..
+          xcodebuild -project iosApp/NutriTrack.xcodeproj -scheme NutriTrack -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath iosApp/build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            build 2>&1 | tee xcode-device.log | grep -E "error:|warning: .*Kotlin|BUILD (SUCCEEDED|FAILED)" || true
+          test -d iosApp/build/Build/Products/Release-iphoneos/NutriTrack.app
+          mkdir -p out/Payload
+          cp -R iosApp/build/Build/Products/Release-iphoneos/NutriTrack.app out/Payload/
+          (cd out && zip -qry NutriTrack-1.0.${{ github.run_number }}.ipa Payload && rm -rf Payload)
+          ls -la out
+
+      - name: Simulator screenshots
+        id: sim
+        if: steps.kotlin.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild -project iosApp/NutriTrack.xcodeproj -scheme NutriTrack -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath iosApp/build-sim \
+            MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            build 2>&1 | tee xcode-sim.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          APP=iosApp/build-sim/Build/Products/Debug-iphonesimulator/NutriTrack.app
+          test -d "$APP"
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          phones = [x for rt, ds in d.items() if 'iOS' in rt for x in ds if x['name'].startswith('iPhone') and 'Pro' in x['name'] and 'Max' not in x['name']]
+          phones = phones or [x for rt, ds in d.items() if 'iOS' in rt for x in ds if x['name'].startswith('iPhone')]
+          print(phones[-1]['udid'])")
+          echo "Simulator $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 || true
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p ios-shots
+          for tab in diary nutrients eat search settings; do
+            xcrun simctl launch --terminate-running-process "$UDID" com.moblized.nutritrack -NTDemo -NTTab $tab
+            sleep 15
+            xcrun simctl io "$UDID" screenshot "ios-shots/ios_$tab.png"
+          done
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl launch --terminate-running-process "$UDID" com.moblized.nutritrack -NTDemo -NTTab diary
+          sleep 12
+          xcrun simctl io "$UDID" screenshot "ios-shots/ios_diary_dark.png"
+          ls -la ios-shots
+          # Crash reports, if the app died on launch.
+          ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i nutri > crashes.txt || true
+          for f in $(cat crashes.txt); do head -c 6000 ~/Library/Logs/DiagnosticReports/$f >> crash.log; done
+
+      - name: iPhone summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, os
+          shots = sorted(os.path.basename(p) for p in glob.glob("ios-shots/*.png"))
+          ipa = glob.glob("out/*.ipa")
+          msg = f"IPA: {os.path.basename(ipa[0]) + ' ' + str(os.path.getsize(ipa[0])) + ' bytes' if ipa else 'none'}%0AShots: {', '.join(shots) or 'none'}"
+          print(f"::notice title=iPhone build::{msg}")
+          if os.path.exists("crash.log"):
+              t = open("crash.log", errors="replace").read()[:6000].replace("%", "%25").replace("\n", "%0A")
+              print(f"::error title=iPhone crash::{t}")
+          PY
+
+      - name: Publish iPhone screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls ios-shots/*.png 2>/dev/null || exit 0
+          gh release view screenshots >/dev/null 2>&1 || \
+            gh release create screenshots --prerelease --title "UI screenshots" --notes "Rendered by CI from the latest build."
+          gh release upload screenshots ios-shots/*.png --clobber
+
+      - name: Report iPhone errors
+        if: steps.kotlin.outcome == 'failure' || steps.device.outcome == 'failure' || steps.sim.outcome == 'failure'
+        run: |
+          python3 tools/ci_report.py kotlin-ios.log xcode-device.log xcode-sim.log
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NutriTrack-ipa
+          path: out/*.ipa
+
+  release:
+    # Only main publishes. The Android release doesn't wait on a broken iPhone build.
+    needs: [build, ios]
+    if: always() && github.ref == 'refs/heads/main' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: NutriTrack-apk
+          path: out
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: NutriTrack-ipa
+          path: out
+
       - name: Release notes
         # The app's update prompt shows these as "What's new".
-        run: git log -1 --format=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > out/notes.md
+        run: git log -1 --format=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > notes.md
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: NutriTrack 1.0.${{ github.run_number }}
-          body_path: out/notes.md
-          files: out/*.apk
+          body_path: notes.md
+          files: |
+            out/*.apk
+            out/*.ipa
           make_latest: true
+
+      - name: SideStore / AltStore source
+        # A fixed URL SideStore checks for new versions:
+        # https://github.com/moblized/moblized-nutritrack/releases/download/ios-source/apps.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IPA=$(ls out/*.ipa 2>/dev/null | head -1)
+          test -n "$IPA" || { echo "No IPA in this build"; exit 0; }
+          python3 - "$IPA" <<'PY'
+          import json, os, sys, datetime
+          ipa = sys.argv[1]
+          run = os.environ["GITHUB_RUN_NUMBER"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          version = f"1.0.{run}"
+          notes = open("notes.md").read().strip()
+          src = {
+            "name": "NutriTrack",
+            "identifier": "com.moblized.nutritrack.source",
+            "sourceURL": f"https://github.com/{repo}/releases/download/ios-source/apps.json",
+            "iconURL": f"https://raw.githubusercontent.com/{repo}/main/iosApp/NutriTrack/Assets.xcassets/AppIcon.appiconset/icon.png",
+            "apps": [{
+              "name": "NutriTrack",
+              "bundleIdentifier": "com.moblized.nutritrack",
+              "developerName": "moblized",
+              "subtitle": "Detailed nutrition tracking",
+              "localizedDescription": "Track calories and up to 68 nutrients with an offline USDA food database, recipes, barcode scanning and Mealie import.",
+              "iconURL": f"https://raw.githubusercontent.com/{repo}/main/iosApp/NutriTrack/Assets.xcassets/AppIcon.appiconset/icon.png",
+              "tintColor": "1E7A52",
+              "category": "lifestyle",
+              "versions": [{
+                "version": version,
+                "buildVersion": run,
+                "date": datetime.date.today().isoformat(),
+                "localizedDescription": notes,
+                "downloadURL": f"https://github.com/{repo}/releases/download/v{version}/NutriTrack-{version}.ipa",
+                "size": os.path.getsize(ipa),
+                "minOSVersion": "16.0",
+              }],
+              "appPermissions": {"entitlements": [], "privacy": {
+                "NSCameraUsageDescription": "Scan a food's barcode to look up its nutrition.",
+                "NSLocalNetworkUsageDescription": "Connects to your Mealie server on your home network.",
+              }},
+            }],
+            "news": [],
+          }
+          json.dump(src, open("apps.json", "w"), indent=2)
+          PY
+          gh release view ios-source >/dev/null 2>&1 || \
+            gh release create ios-source --prerelease --title "iPhone app source (SideStore)" \
+              --notes "Add this source in SideStore or AltStore: https://github.com/${GITHUB_REPOSITORY}/releases/download/ios-source/apps.json"
+          gh release upload ios-source apps.json --clobber

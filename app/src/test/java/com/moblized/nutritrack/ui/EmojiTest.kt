@@ -8,7 +8,9 @@ import org.junit.Assume
 import org.junit.Test
 import java.io.File
 import java.sql.DriverManager
-import java.time.LocalDate
+import com.moblized.nutritrack.data.minusDays
+import com.moblized.nutritrack.data.plusDays
+import kotlinx.datetime.LocalDate
 
 class EmojiTest {
 
@@ -66,7 +68,7 @@ class EmojiTest {
 
     @Test
     fun countsStreaks() {
-        val today = LocalDate.of(2026, 10, 28)
+        val today = LocalDate(2026, 10, 28)
         val d = { n: Long -> today.minusDays(n).toString() }
         assertEquals(0, Progress.streak(emptyList(), today))
         assertEquals(3, Progress.streak(listOf(d(0), d(1), d(2), d(4)), today))
@@ -101,7 +103,7 @@ class LowNutrientsTest {
 
     @Test
     fun judgesTheDayOnlyInTheEvening() {
-        val date = LocalDate.of(2026, 10, 28)
+        val date = LocalDate(2026, 10, 28)
         val day = listOf(entry("2026-10-28", vitD = 3.0, fiber = 30.0))
         val morning = com.moblized.nutritrack.data.LowNutrients.warnings(date, date.atTime(9, 0), day, emptyList(), targets)
         assertTrue(morning.isEmpty)
@@ -116,7 +118,7 @@ class LowNutrientsTest {
 
     @Test
     fun averagesTheWeekBeforeTheDay() {
-        val date = LocalDate.of(2026, 10, 28)
+        val date = LocalDate(2026, 10, 28)
         val recent = listOf(
             entry("2026-10-27", vitD = 6.0, fiber = 20.0),
             entry("2026-10-26", vitD = 6.0, fiber = 40.0),
@@ -138,7 +140,7 @@ class LowNutrientsTest {
         assertEquals(15, ids.shown(false).size)
         assertEquals(ids.all.size, ids.shown(true).size)
         assertTrue(ids.highlights(false).all { it in ids.essentials })
-        val date = LocalDate.of(2026, 10, 28)
+        val date = LocalDate(2026, 10, 28)
         val withC = targets + (ids.VIT_C to 90.0)
         val day = listOf(entry("2026-10-28", vitD = 3.0, fiber = 30.0))
         // Vitamin C is at 0% but isn't on a nutrition label, so essentials mode leaves it out.
