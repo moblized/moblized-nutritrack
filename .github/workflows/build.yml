@@ -162,14 +162,24 @@ jobs:
         run: |
           set -o pipefail
           cd iosApp && xcodegen generate && cd ..
-          xcodebuild -project iosApp/NutriTrack.xcodeproj -scheme NutriTrack -configuration Release \
-            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath iosApp/build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            build 2>&1 | tee xcode-device.log | grep -E "error:|warning: .*Kotlin|BUILD (SUCCEEDED|FAILED)" || true
-          test -d iosApp/build/Build/Products/Release-iphoneos/NutriTrack.app
+          build_device() {
+            xcodebuild -project iosApp/NutriTrack.xcodeproj -scheme NutriTrack -configuration Release \
+              -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath iosApp/build \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+              build > xcode-device.log 2>&1
+            local status=$?
+            grep -E "error:|BUILD (SUCCEEDED|FAILED)" xcode-device.log | head -40
+            return $status
+          }
+          # A failed build leaves an empty NutriTrack.app behind, so never package without a real app binary.
+          build_device || { echo "::warning::Device build failed; retrying once"; rm -rf iosApp/build; build_device; }
+          APP=iosApp/build/Build/Products/Release-iphoneos/NutriTrack.app
+          test -f "$APP/NutriTrack"
+          [ "$(stat -f%z "$APP/NutriTrack")" -gt 1000000 ]
+          test -f "$APP/usda.db"
           mkdir -p out/Payload
-          cp -R iosApp/build/Build/Products/Release-iphoneos/NutriTrack.app out/Payload/
+          cp -R "$APP" out/Payload/
           (cd out && zip -qry NutriTrack-1.0.${{ github.run_number }}.ipa Payload && rm -rf Payload)
           ls -la out
 
@@ -271,6 +281,10 @@ jobs:
           name: NutriTrack-ipa
           path: out
 
+      - name: Drop an unusable IPA
+        # Never publish (or point SideStore at) an iPhone build without a real app inside.
+        run: find out -name '*.ipa' -size -1000k -print -delete || true
+
       - name: Release notes
         # The app's update prompt shows these as "What's new".
         run: git log -1 --format=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > notes.md
@@ -293,14 +307,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           IPA=$(ls out/*.ipa 2>/dev/null | head -1)
-          test -n "$IPA" || { echo "No IPA in this build"; exit 0; }
-          python3 - "$IPA" <<'PY'
-          import json, os, sys, datetime
-          ipa = sys.argv[1]
-          run = os.environ["GITHUB_RUN_NUMBER"]
+          if [ -n "$IPA" ]; then
+            export SRC_VERSION="1.0.${GITHUB_RUN_NUMBER}" SRC_SIZE=$(stat -c%s "$IPA")
+            export SRC_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${SRC_VERSION}/$(basename "$IPA")"
+            cp notes.md src-notes.md
+          else
+            # No iPhone build this time: keep SideStore on the newest release that has a working one.
+            LAST=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=40" --jq \
+              '[.[] | select(.prerelease | not) | . as $r | .assets[] | select((.name | endswith(".ipa")) and .size > 1000000)
+                | "\($r.tag_name) \(.size) \(.browser_download_url)"] | first // empty')
+            [ -n "$LAST" ] || { echo "No release has a working iPhone build"; exit 0; }
+            read TAG SRC_SIZE SRC_URL <<< "$LAST"
+            export SRC_VERSION="${TAG#v}" SRC_SIZE SRC_URL
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .body > src-notes.md
+            echo "SideStore stays on ${TAG}"
+          fi
+          python3 - <<'PY'
+          import json, os, datetime
           repo = os.environ["GITHUB_REPOSITORY"]
-          version = f"1.0.{run}"
-          notes = open("notes.md").read().strip()
+          version = os.environ["SRC_VERSION"]
+          notes = open("src-notes.md").read().strip()
           src = {
             "name": "NutriTrack",
             "identifier": "com.moblized.nutritrack.source",
@@ -317,11 +343,11 @@ jobs:
               "category": "lifestyle",
               "versions": [{
                 "version": version,
-                "buildVersion": run,
+                "buildVersion": version.split(".")[-1],
                 "date": datetime.date.today().isoformat(),
                 "localizedDescription": notes,
-                "downloadURL": f"https://github.com/{repo}/releases/download/v{version}/NutriTrack-{version}.ipa",
-                "size": os.path.getsize(ipa),
+                "downloadURL": os.environ["SRC_URL"],
+                "size": int(os.environ["SRC_SIZE"]),
                 "minOSVersion": "16.0",
               }],
               "appPermissions": {"entitlements": [], "privacy": {
@@ -332,6 +358,7 @@ jobs:
             "news": [],
           }
           json.dump(src, open("apps.json", "w"), indent=2)
+          print(f"SideStore source: {version} {os.environ['SRC_URL']}")
           PY
           gh release view ios-source >/dev/null 2>&1 || \
             gh release create ios-source --prerelease --title "iPhone app source (SideStore)" \

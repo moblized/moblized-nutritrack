@@ -78,9 +78,10 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    // Receipt scanning: Google's document scanner (crops and flattens the photo) and on-device text recognition.
+    // Receipt scanning: Google's document scanner (crops and flattens the photo) and on-device text recognition,
+    // both through Google Play services so the APK stays small.
     implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
-    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.squareup.okio:okio:3.9.1")

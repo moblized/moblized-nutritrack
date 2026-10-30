@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.glance.appwidget.updateAll
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -104,13 +105,14 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
                 try {
                     lines(ReceiptOcr.read(context, pages))
                 } catch (e: Exception) {
-                    error(e.message ?: "unknown error")
+                    error(scannerError(e))
                 }
             }
         }
         if (activity == null) return null
         return remember(activity) {
             val start: () -> Unit = {
+                runCatching { ReceiptOcr.warmUp() }
                 val options = GmsDocumentScannerOptions.Builder()
                     .setGalleryImportAllowed(true) // a screenshot of an online order works too
                     .setPageLimit(5) // long receipts in parts
@@ -119,11 +121,18 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
                     .build()
                 GmsDocumentScanning.getClient(options).getStartScanIntent(activity)
                     .addOnSuccessListener { sender -> launcher.launch(IntentSenderRequest.Builder(sender).build()) }
-                    .addOnFailureListener { e -> error(e.message ?: "unknown error") }
+                    .addOnFailureListener { e -> error(scannerError(e)) }
             }
             start
         }
     }
+
+    private fun scannerError(e: Exception): String =
+        if ((e as? MlKitException)?.errorCode == MlKitException.UNAVAILABLE) {
+            "Google Play services is still downloading the scanner. Try again in a minute."
+        } else {
+            e.message ?: "unknown error"
+        }
 
     @Composable
     override fun rememberNotificationPermission(onResult: (Boolean) -> Unit): () -> Unit {
