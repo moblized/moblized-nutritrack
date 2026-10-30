@@ -52,8 +52,8 @@ private fun Month.short(): String = name.take(3).lowercase().replaceFirstChar { 
 
 /** "Thu, Oct 30" this year, "Oct 30, 2025" otherwise. */
 fun LocalDate.shortLabel(today: LocalDate): String =
-    if (year == today.year) "${SHORT_DAYS.getValue(dayOfWeek)}, ${month.short()} $dayOfMonth"
-    else "${month.short()} $dayOfMonth, $year"
+    if (year == today.year) "${SHORT_DAYS.getValue(dayOfWeek)}, ${month.short()} $day"
+    else "${month.short()} $day, $year"
 
 /** "7:30 PM" for minutes after midnight. */
 fun clockLabel(minutesOfDay: Int): String {

@@ -153,7 +153,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          ./gradlew --no-daemon :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosSimulatorArm64 2>&1 | tee kotlin-ios.log
+          ./gradlew --no-daemon :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 2>&1 | tee kotlin-ios.log
 
       - name: Build unsigned IPA
         id: device
@@ -181,6 +181,7 @@ jobs:
           set -o pipefail
           xcodebuild -project iosApp/NutriTrack.xcodeproj -scheme NutriTrack -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath iosApp/build-sim \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             build 2>&1 | tee xcode-sim.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           APP=iosApp/build-sim/Build/Products/Debug-iphonesimulator/NutriTrack.app
@@ -239,7 +240,11 @@ jobs:
       - name: Report iPhone errors
         if: steps.kotlin.outcome == 'failure' || steps.device.outcome == 'failure' || steps.sim.outcome == 'failure'
         run: |
-          python3 tools/ci_report.py kotlin-ios.log xcode-device.log xcode-sim.log
+          logs=""
+          [ "${{ steps.kotlin.outcome }}" = failure ] && logs="$logs kotlin-ios.log"
+          [ "${{ steps.device.outcome }}" = failure ] && logs="$logs xcode-device.log"
+          [ "${{ steps.sim.outcome }}" = failure ] && logs="$logs xcode-sim.log"
+          python3 tools/ci_report.py $logs
           exit 1
 
       - uses: actions/upload-artifact@v4
