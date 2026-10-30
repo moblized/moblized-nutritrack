@@ -88,10 +88,15 @@ jobs:
           name: NutriTrack-apk
           path: out/*.apk
 
+      - name: Release notes
+        # The app's update prompt shows these as "What's new".
+        run: git log -1 --format=%B | grep -v -E '^(Co-Authored-By|Claude-Session):' > out/notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: NutriTrack 1.0.${{ github.run_number }}
+          body_path: out/notes.md
           files: out/*.apk
           make_latest: true

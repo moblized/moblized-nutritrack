@@ -286,6 +286,7 @@ fun AppNav(settings: Settings) {
             AppBottomBar(route) { nav.switchTab(it) }
         }
     }
+    UpdatePrompt()
 }
 
 @Composable

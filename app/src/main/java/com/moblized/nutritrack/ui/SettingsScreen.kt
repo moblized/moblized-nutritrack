@@ -65,6 +65,7 @@ import com.moblized.nutritrack.data.Sex
 import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.ThemeMode
 import com.moblized.nutritrack.data.Units
+import com.moblized.nutritrack.data.Updates
 import com.moblized.nutritrack.ui.theme.warningColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -497,6 +498,38 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
             }
 
             item { Section("ℹ️ About") }
+            item {
+                var updateStatus by remember { mutableStateOf<String?>(null) }
+                var checking by remember { mutableStateOf(false) }
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("NutriTrack ${remember { Updates.installedVersionName(context) }}", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                updateStatus ?: "Checks for updates whenever you open the app",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(
+                            enabled = !checking,
+                            onClick = {
+                                checking = true
+                                updateStatus = "Checking…"
+                                scope.launch {
+                                    updateStatus = try {
+                                        val newer = Updates.checkNow(context)
+                                        if (newer != null) "Version ${newer.versionName} is available" else "You're on the latest version"
+                                    } catch (e: Exception) {
+                                        "Couldn't reach GitHub. Check your connection and try again."
+                                    }
+                                    checking = false
+                                }
+                            },
+                        ) { Text("Check for updates") }
+                    }
+                }
+            }
             item {
                 val count = remember { mutableIntStateOf(0) }
                 LaunchedEffect(Unit) {

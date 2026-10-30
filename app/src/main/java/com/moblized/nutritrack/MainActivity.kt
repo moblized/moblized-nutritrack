@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Settings
 import com.moblized.nutritrack.data.ThemeMode
+import com.moblized.nutritrack.data.Updates
 import com.moblized.nutritrack.ui.AppNav
 import com.moblized.nutritrack.ui.theme.NutriTheme
 import kotlinx.coroutines.launch
@@ -51,6 +52,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Pick up a new weigh-in from the smart scale (Health Connect only allows reads in the foreground).
         lifecycleScope.launch { runCatching { Graph.app.syncWeight() } }
+        // Offer a newer release when one is out (checked at most every few hours).
+        lifecycleScope.launch { runCatching { Updates.checkIfDue(applicationContext) } }
     }
 
     override fun onStop() {

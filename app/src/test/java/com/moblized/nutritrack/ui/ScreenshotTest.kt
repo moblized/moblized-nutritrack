@@ -201,6 +201,26 @@ class ScreenshotTest {
         }
     }
 
+    /** The update prompt, ready and mid-download. */
+    @Test
+    @Config(qualifiers = "w412dp-h1000dp-xhdpi")
+    fun updatePrompt() {
+        val release = com.moblized.nutritrack.data.AppRelease(
+            versionCode = 21, versionName = "1.0.21",
+            notes = "Settings toggle: super detailed nutrition vs essentials\n\n" +
+                "Off shows only the 15 Nutrition Facts label nutrients everywhere: the nutrient list, food details, " +
+                "diary highlights and What to eat suggestions.",
+            apkUrl = "https://example.com/NutriTrack-1.0.21.apk", apkBytes = 41_200_000, pageUrl = "https://example.com",
+        )
+        shoot("14_update_prompt") {
+            Column(Modifier.padding(16.dp)) {
+                UpdateCard(release, "1.0.20", UpdateStep.Ready, {}, {}, {})
+                androidx.compose.foundation.layout.Spacer(Modifier.size(16.dp))
+                UpdateCard(release, "1.0.20", UpdateStep.Downloading(0.42f), {}, {}, {})
+            }
+        }
+    }
+
     @Test
     fun searchResults() {
         fun usda(name: String, category: String, kcal: Double) =
