@@ -36,7 +36,7 @@ kotlin {
             api("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.9.6")
             api("org.jetbrains.androidx.navigation:navigation-compose:2.9.1")
             api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-            api("org.jetbrains.kotlinx:kotlinx-datetime:0.6.2")
+            api("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
             api("androidx.room:room-runtime:2.7.2")
             api("androidx.sqlite:sqlite-bundled:2.5.2")
             api("androidx.datastore:datastore-preferences-core:1.1.7")

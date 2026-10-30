@@ -24,6 +24,7 @@ import com.moblized.nutritrack.data.LowWarnings
 import com.moblized.nutritrack.data.Targets
 import com.moblized.nutritrack.data.minusDays
 import com.moblized.nutritrack.data.now
+import kotlinx.datetime.atTime
 import com.moblized.nutritrack.ui.Emoji
 import java.time.DayOfWeek
 import java.time.Duration

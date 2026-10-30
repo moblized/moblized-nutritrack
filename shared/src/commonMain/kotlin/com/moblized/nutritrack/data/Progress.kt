@@ -32,7 +32,6 @@ object Progress {
     private val seen = HashMap<String, Set<Int>>()
 
     /** Returns goals that were not met the last time this day was shown; the first look sets the baseline. */
-    @Synchronized
     fun newlyMet(date: String, met: Set<Int>): Set<Int> {
         val before = seen[date]
         seen[date] = met

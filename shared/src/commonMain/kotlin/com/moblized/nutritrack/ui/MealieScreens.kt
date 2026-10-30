@@ -73,6 +73,7 @@ import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.data.sumNutrients
 import com.moblized.nutritrack.ui.theme.foodTileColor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

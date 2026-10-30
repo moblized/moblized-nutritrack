@@ -42,6 +42,7 @@ import java.io.File
 import com.moblized.nutritrack.data.minusDays
 import com.moblized.nutritrack.data.now
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.atTime
 
 /** Renders the main screens with realistic data so the look can be checked without a phone. */
 @RunWith(RobolectricTestRunner::class)
