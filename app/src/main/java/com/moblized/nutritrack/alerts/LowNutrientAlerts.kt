@@ -26,7 +26,6 @@ import com.moblized.nutritrack.data.minusDays
 import com.moblized.nutritrack.data.now
 import kotlinx.datetime.atTime
 import com.moblized.nutritrack.ui.Emoji
-import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
@@ -134,7 +133,7 @@ class LowNutrientWorker(context: Context, params: WorkerParameters) : CoroutineW
                 today, today.atTime(23, 59), dayEntries, recent, Targets.compute(settings), settings.detailedNutrition,
             )
             // The weekly average is only mentioned on Sundays so it doesn't repeat every night.
-            val msg = LowNutrientAlerts.message(w, includeWeek = today.dayOfWeek == DayOfWeek.SUNDAY)
+            val msg = LowNutrientAlerts.message(w, includeWeek = today.dayOfWeek == kotlinx.datetime.DayOfWeek.SUNDAY)
             if (msg != null) LowNutrientAlerts.post(applicationContext, msg.first, msg.second)
         } finally {
             LowNutrientAlerts.schedule(applicationContext, settings.lowNotifyMinutes)
