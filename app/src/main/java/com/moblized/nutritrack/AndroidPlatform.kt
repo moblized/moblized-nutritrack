@@ -28,7 +28,7 @@ import com.moblized.nutritrack.data.AlertScheduler
 import com.moblized.nutritrack.data.AppUpdater
 import com.moblized.nutritrack.data.HealthService
 import com.moblized.nutritrack.data.HealthSync
-import com.moblized.nutritrack.data.OcrLine
+import com.moblized.nutritrack.data.ScannedReceipt
 import com.moblized.nutritrack.data.PlatformServices
 import com.moblized.nutritrack.data.Settings
 import com.moblized.nutritrack.widget.TodayWidget
@@ -49,6 +49,8 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
         override fun schedule(minutes: Int, replace: Boolean) = LowNutrientAlerts.schedule(context, minutes, replace)
         override fun cancel() = LowNutrientAlerts.cancel(context)
     }
+
+    override val receiptScanning: Boolean get() = true
 
     override val animationsEnabled: Boolean
         get() = runCatching { Global.getFloat(context.contentResolver, Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }.getOrDefault(true)
@@ -88,12 +90,12 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
     @Composable
     override fun rememberReceiptScanner(
         onReading: () -> Unit,
-        onLines: (List<OcrLine>) -> Unit,
+        onScanned: (ScannedReceipt) -> Unit,
         onError: (String) -> Unit,
     ): (() -> Unit)? {
         val activity = LocalContext.current.findActivity()
         val reading by rememberUpdatedState(onReading)
-        val lines by rememberUpdatedState(onLines)
+        val scanned by rememberUpdatedState(onScanned)
         val error by rememberUpdatedState(onError)
         val scope = rememberCoroutineScope()
         val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
@@ -103,7 +105,7 @@ class AndroidPlatform(private val context: Context) : PlatformServices {
             reading()
             scope.launch {
                 try {
-                    lines(ReceiptOcr.read(context, pages))
+                    scanned(ReceiptOcr.read(context, pages))
                 } catch (e: Exception) {
                     error(scannerError(e))
                 }

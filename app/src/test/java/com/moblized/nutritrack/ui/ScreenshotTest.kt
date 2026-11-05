@@ -335,6 +335,18 @@ class ScreenshotTest {
     }
 
     @Test
+    fun receiptReadingWithAi() {
+        shoot("16_receipt_reading_ai") {
+            ReceiptReview(
+                date = LocalDate.now(), meal = 2, loaded = false, itemCount = 0, matched = 0, matching = true,
+                loadingText = "Reading the receipt with qwen2.5vl:7b on your server…",
+                rows = emptyList(), skipped = emptyList(), saving = false, onBack = {}, onToggle = { _, _ -> },
+                onEdit = {}, onChangeFood = {}, onAddSkipped = {}, onLog = {},
+            )
+        }
+    }
+
+    @Test
     @Config(qualifiers = "w412dp-h120dp-xhdpi")
     fun bottomBar() {
         shoot("10_bottom_bar") {

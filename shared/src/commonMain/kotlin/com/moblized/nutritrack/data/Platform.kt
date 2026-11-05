@@ -38,9 +38,12 @@ interface PlatformServices {
     @Composable
     fun rememberReceiptScanner(
         onReading: () -> Unit,
-        onLines: (List<OcrLine>) -> Unit,
+        onScanned: (ScannedReceipt) -> Unit,
         onError: (String) -> Unit,
     ): (() -> Unit)? = null
+
+    /** Receipt scanning exists on this platform (so its settings show). */
+    val receiptScanning: Boolean get() = false
 
     /** Returns a function that asks to show notifications (when needed) and reports whether it may. */
     @Composable

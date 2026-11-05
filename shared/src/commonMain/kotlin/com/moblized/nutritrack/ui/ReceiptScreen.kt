@@ -51,7 +51,8 @@ import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.Meals
 import com.moblized.nutritrack.data.NutrientCodec
 import com.moblized.nutritrack.data.Nutrients
-import com.moblized.nutritrack.data.OcrLine
+import com.moblized.nutritrack.data.OpenWebUiClient
+import com.moblized.nutritrack.data.ScannedReceipt
 import com.moblized.nutritrack.data.ParsedReceipt
 import com.moblized.nutritrack.data.ReceiptItem
 import com.moblized.nutritrack.data.ReceiptMatch
@@ -60,15 +61,16 @@ import com.moblized.nutritrack.data.ReceiptParser
 import com.moblized.nutritrack.data.RecipeItem
 import com.moblized.nutritrack.data.scaled
 import com.moblized.nutritrack.data.sumNutrients
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 
-/** The text of the receipt just scanned, handed from the scanner to the review screen. */
+/** The receipt just scanned, handed from the scanner to the review screen. */
 object ReceiptDraft {
-    var lines: List<OcrLine> = emptyList()
+    var scan: ScannedReceipt = ScannedReceipt(emptyList())
 }
 
 data class ReceiptRow(
@@ -79,7 +81,38 @@ data class ReceiptRow(
     /** Every word of the line was found in the food's name. */
     val confident: Boolean,
     val estimated: Boolean,
+    /** What to search for when choosing a different food. */
+    val query: String = label,
 )
+
+/** Who read the receipt, shown above the matches. */
+data class ReceiptReader(val text: String, val warning: Boolean = false)
+
+/**
+ * Reads a scanned receipt: with the user's Open WebUI model when that's set up (its reading of abbreviations is
+ * much better), otherwise, or if the server can't be reached, on the phone.
+ */
+suspend fun readReceipt(scan: ScannedReceipt, onAi: (String) -> Unit = {}): Pair<ParsedReceipt, ReceiptReader?> {
+    val rows = withContext(Dispatchers.Default) { ReceiptParser.rows(scan.lines) }
+    val onPhone = withContext(Dispatchers.Default) { ReceiptParser.parse(rows) }
+    val s = Graph.app.settings.current()
+    if (!s.aiReadsReceipts || scan.images.isEmpty()) return onPhone to null
+    onAi(s.aiModel)
+    return try {
+        val ai = OpenWebUiClient(s.aiUrl, s.aiKey).readReceipt(s.aiModel, scan.images, rows.joinToString("\n")).receipt
+        if (ai.items.isEmpty() && onPhone.items.isNotEmpty()) {
+            onPhone to ReceiptReader("${s.aiModel} didn't find any food, so the phone read the receipt instead.", warning = true)
+        } else {
+            // Lines the model didn't use stay available to add by hand.
+            val unused = rows.filter { row -> ai.items.none { row.contains(it.text, ignoreCase = true) || it.text.contains(row, ignoreCase = true) } }
+            ai.copy(store = ai.store ?: onPhone.store, skipped = unused) to ReceiptReader("Read by ${s.aiModel} on your server")
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        onPhone to ReceiptReader("${e.message ?: "Open WebUI didn't answer"}. The phone read the receipt instead.", warning = true)
+    }
+}
 
 fun receiptLabel(item: ReceiptItem): String =
     (if (item.quantity != 1.0) "${fmtQty(item.quantity)} × " else "") + item.text +
@@ -87,10 +120,14 @@ fun receiptLabel(item: ReceiptItem): String =
 
 /** Review rows for one receipt line ("Chips & Guac" gives two). */
 fun receiptRows(item: ReceiptItem, results: List<ReceiptMatch>): List<ReceiptRow> {
-    if (results.isEmpty()) return listOf(ReceiptRow(receiptLabel(item), null, include = false, confident = false, estimated = false))
+    val query = item.query ?: item.text
+    if (results.isEmpty()) return listOf(ReceiptRow(receiptLabel(item), null, include = false, confident = false, estimated = false, query = query))
     return results.map { r ->
         val label = if (results.size > 1) receiptLabel(item) + " → " + r.text else receiptLabel(item)
-        ReceiptRow(label, r.item, include = r.item != null && r.confident, confident = r.confident, estimated = r.estimatedAmount)
+        ReceiptRow(
+            label, r.item, include = r.item != null && r.confident, confident = r.confident, estimated = r.estimatedAmount,
+            query = if (results.size > 1) r.text else query,
+        )
     }
 }
 
@@ -105,6 +142,8 @@ fun ReceiptScreen(date: LocalDate, meal: Int, onBack: () -> Unit, onLogged: (Int
     var editIndex by remember { mutableStateOf<Int?>(null) }
     var pickIndex by remember { mutableStateOf<Int?>(null) }
     var matcher by remember { mutableStateOf<ReceiptMatcher?>(null) }
+    var readingWith by remember { mutableStateOf<String?>(null) }
+    var reader by remember { mutableStateOf<ReceiptReader?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun matchInto(item: ReceiptItem, p: ParsedReceipt, m: ReceiptMatcher) {
@@ -115,7 +154,8 @@ fun ReceiptScreen(date: LocalDate, meal: Int, onBack: () -> Unit, onLogged: (Int
     }
 
     LaunchedEffect(Unit) {
-        val p = withContext(Dispatchers.Default) { ReceiptParser.parse(ReceiptParser.rows(ReceiptDraft.lines)) }
+        val (p, who) = readReceipt(ReceiptDraft.scan) { model -> readingWith = model }
+        reader = who
         parsed = p
         skipped.clear()
         skipped += p.skipped
@@ -133,6 +173,8 @@ fun ReceiptScreen(date: LocalDate, meal: Int, onBack: () -> Unit, onLogged: (Int
         date = date,
         meal = meal,
         loaded = parsed != null,
+        loadingText = readingWith?.let { "Reading the receipt with $it on your server…" },
+        reader = reader,
         itemCount = parsed?.items?.size ?: 0,
         matched = matched,
         matching = matching,
@@ -189,7 +231,7 @@ fun ReceiptScreen(date: LocalDate, meal: Int, onBack: () -> Unit, onLogged: (Int
             IngredientPicker(
                 excludeRecipeId = 0L,
                 title = "Choose food",
-                initialQuery = row.label.substringAfterLast(" → ").substringAfter(" × ").substringBefore(" ("),
+                initialQuery = row.query,
                 onDismiss = { pickIndex = null },
                 onPicked = { item ->
                     rows[i] = row.copy(item = item, include = true, confident = true, estimated = false)
@@ -208,6 +250,8 @@ fun ReceiptReview(
     meal: Int,
     loaded: Boolean,
     itemCount: Int,
+    loadingText: String? = null,
+    reader: ReceiptReader? = null,
     matched: Int,
     matching: Boolean,
     rows: List<ReceiptRow>,
@@ -272,7 +316,23 @@ fun ReceiptReview(
     ) { pad ->
         when {
             !loaded -> Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                    CircularProgressIndicator()
+                    loadingText?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 16.dp),
+                        )
+                        Text(
+                            "A local model can take up to a minute.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
             }
             itemCount == 0 && rows.isEmpty() && !matching -> Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
@@ -300,6 +360,15 @@ fun ReceiptReview(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                reader?.let { r ->
+                    item {
+                        Text(
+                            (if (r.warning) "⚠️ " else "🤖 ") + r.text,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (r.warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
                 item {
                     if (matching) {
                         Text(
