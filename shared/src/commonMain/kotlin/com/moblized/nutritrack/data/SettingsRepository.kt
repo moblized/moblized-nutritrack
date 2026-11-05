@@ -68,8 +68,18 @@ data class Settings(
     val lowNotifyMinutes: Int = 19 * 60 + 30,
     /** All 68 nutrients (vitamins, minerals, amino acids, fats); off shows just the label essentials. */
     val detailedNutrition: Boolean = true,
+    /** The user's Open WebUI server, which can read receipt photos with a vision model. */
+    val aiUrl: String = "",
+    val aiKey: String = "",
+    val aiModel: String = "",
+    /** Read scanned receipts with Open WebUI instead of on the phone. */
+    val aiReceipts: Boolean = true,
 ) {
     val mealieConfigured: Boolean get() = mealieUrl.isNotBlank() && mealieToken.isNotBlank()
+    val aiConfigured: Boolean get() = aiUrl.isNotBlank() && aiKey.isNotBlank() && aiModel.isNotBlank()
+
+    /** Receipts go to Open WebUI. */
+    val aiReadsReceipts: Boolean get() = aiConfigured && aiReceipts
 }
 
 /** File name of the settings store; on Android it lives where the app always kept it (files/datastore/). */
@@ -102,6 +112,10 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val lowNotify = booleanPreferencesKey("low_notify")
         val lowNotifyMinutes = intPreferencesKey("low_notify_minutes")
         val detailed = booleanPreferencesKey("detailed_nutrition")
+        val aiUrl = stringPreferencesKey("openwebui_url")
+        val aiKey = stringPreferencesKey("openwebui_key")
+        val aiModel = stringPreferencesKey("openwebui_model")
+        val aiReceipts = booleanPreferencesKey("openwebui_receipts")
         val updateChecked = longPreferencesKey("update_checked")
         val updateSnoozedCode = intPreferencesKey("update_snoozed_code")
         val updateSnoozedUntil = longPreferencesKey("update_snoozed_until")
@@ -144,6 +158,10 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
             lowNotify = this[K.lowNotify] ?: d.lowNotify,
             lowNotifyMinutes = this[K.lowNotifyMinutes] ?: d.lowNotifyMinutes,
             detailedNutrition = this[K.detailed] ?: d.detailedNutrition,
+            aiUrl = this[K.aiUrl] ?: "",
+            aiKey = this[K.aiKey] ?: "",
+            aiModel = this[K.aiModel] ?: "",
+            aiReceipts = this[K.aiReceipts] ?: d.aiReceipts,
         )
     }
 
@@ -181,6 +199,14 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         it[K.mealieUrl] = url.trim().trimEnd('/')
         it[K.mealieToken] = token.trim()
     }
+
+    suspend fun setOpenWebUi(url: String, key: String) = store.edit {
+        it[K.aiUrl] = url.trim().trimEnd('/')
+        it[K.aiKey] = key.trim()
+    }
+
+    suspend fun setAiModel(model: String) = store.edit { it[K.aiModel] = model.trim() }
+    suspend fun setAiReceipts(on: Boolean) = store.edit { it[K.aiReceipts] = on }
 
     suspend fun setCalorieOverride(kcal: Int?) = store.edit {
         it.remove(K.kcal)

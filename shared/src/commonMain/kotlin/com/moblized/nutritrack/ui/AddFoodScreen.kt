@@ -143,9 +143,9 @@ fun AddFoodScreen(
     // Android only for now: photograph a receipt and log what's on it.
     val receiptScanner = Graph.app.platform.rememberReceiptScanner(
         onReading = { readingReceipt = true },
-        onLines = { lines ->
+        onScanned = { scan ->
             readingReceipt = false
-            ReceiptDraft.lines = lines
+            ReceiptDraft.scan = scan
             onReceipt()
         },
         onError = { msg ->

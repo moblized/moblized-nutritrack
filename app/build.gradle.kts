@@ -88,6 +88,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
+    testImplementation("io.ktor:ktor-client-mock:3.2.3")
     testImplementation("org.robolectric:robolectric:4.13")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.29.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.29.0")

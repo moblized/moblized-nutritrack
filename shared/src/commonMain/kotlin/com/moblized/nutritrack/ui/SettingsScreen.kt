@@ -399,6 +399,11 @@ fun SettingsScreen(settings: Settings, onOpenTargets: () -> Unit) {
                 }
             }
 
+            if (platform.receiptScanning) {
+                item { Section("🤖 Open WebUI") }
+                item { OpenWebUiSettings(settings) }
+            }
+
             item { Section("ℹ️ About") }
             item {
                 var updateStatus by remember { mutableStateOf<String?>(null) }

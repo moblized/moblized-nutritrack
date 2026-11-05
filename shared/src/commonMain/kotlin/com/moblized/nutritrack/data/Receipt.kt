@@ -12,7 +12,17 @@ data class OcrLine(val text: String, val left: Int, val top: Int, val right: Int
 }
 
 /** One thing on the receipt: "2 Big Mac" is 2 of them, "6 McNuggets" is one order of 6 pieces. */
-data class ReceiptItem(val text: String, val quantity: Double = 1.0, val pieces: Int? = null)
+data class ReceiptItem(
+    /** As printed on the receipt. */
+    val text: String,
+    val quantity: Double = 1.0,
+    val pieces: Int? = null,
+    /** A plain food name to match with, when an AI read the receipt ("GV WHL MILK" -> "whole milk"). */
+    val query: String? = null,
+)
+
+/** A scanned receipt: what the phone read, and the photos (JPEG) for an AI to read. */
+class ScannedReceipt(val lines: List<OcrLine>, val images: List<ByteArray> = emptyList())
 
 data class ParsedReceipt(
     /** A restaurant chain the food database knows ("mcdonald"), from the receipt's header. */
@@ -76,6 +86,18 @@ object ReceiptParser {
 
     private fun letters(s: String) = s.count { it.isLetter() }
 
+    /** The chain a store name belongs to, if the food database has its dishes ("McDonald's" -> "mcdonald"). */
+    fun storeKey(name: String?): String? {
+        val low = name?.lowercase()?.replace("'", "")?.replace("’", "") ?: return null
+        return STORES.firstOrNull { low.contains(it.first) }?.second
+    }
+
+    /** Mexican food on the receipt, so "Chips" means tortilla chips. */
+    fun isMexican(lines: List<String>): Boolean = lines.any { MEXICAN.containsMatchIn(it) }
+
+    /** Totals, tax, payment and the like. */
+    fun looksLikeNotFood(text: String): Boolean = SKIP.containsMatchIn(text.lowercase())
+
     /** Puts words printed on the same row back together ("Big Mac" on the left, "5.99" on the right). */
     fun rows(lines: List<OcrLine>): List<String> {
         val ls = lines.filter { it.text.isNotBlank() }
@@ -99,12 +121,7 @@ object ReceiptParser {
 
     fun parse(rows: List<String>): ParsedReceipt {
         val lines = rows.map { it.split(Regex("\\s+")).filter(String::isNotEmpty).joinToString(" ") }.filter { it.isNotEmpty() }
-        var store: String? = null
-        for (r in lines.take(8)) {
-            val low = r.lowercase().replace("'", "").replace("’", "")
-            store = STORES.firstOrNull { low.contains(it.first) }?.second
-            if (store != null) break
-        }
+        val store = lines.take(8).firstNotNullOfOrNull { storeKey(it) }
         val cleaned = lines.map { r ->
             var toks = r.replace("$ ", "$").split(' ')
             var price: String? = null
@@ -190,7 +207,7 @@ object ReceiptParser {
             val i = merged.indexOfFirst { o -> o.text.equals(it.text, ignoreCase = true) && o.pieces == it.pieces }
             if (i >= 0) merged[i] = merged[i].copy(quantity = merged[i].quantity + it.quantity) else merged += it
         }
-        return ParsedReceipt(store, merged, skipped, lines.any { MEXICAN.containsMatchIn(it) })
+        return ParsedReceipt(store, merged, skipped, isMexican(lines))
     }
 }
 
@@ -215,8 +232,11 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
 
     private data class Terms(val terms: List<String>, val kinds: Map<String, Kind>, val size: String?)
 
-    fun match(item: ReceiptItem, store: String?, mexican: Boolean): List<ReceiptMatch> =
-        match(item.text, item.quantity, item.pieces, store, mexican, split = true)
+    fun match(item: ReceiptItem, store: String?, mexican: Boolean): List<ReceiptMatch> {
+        val results = match(item.query ?: item.text, item.quantity, item.pieces, store, mexican, split = true)
+        // Show what the receipt says, not the cleaned-up name it was matched by.
+        return if (item.query != null && results.size == 1) results.map { it.copy(text = item.text) } else results
+    }
 
     private fun match(text: String, qty: Double, pieces: Int?, store: String?, mexican: Boolean, split: Boolean): List<ReceiptMatch> {
         val t = terms(text, mexican)
@@ -226,11 +246,11 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
         var head = nouns.last()
         val main = t.terms.filter { t.kinds[it] != Kind.WITH }.ifEmpty { t.terms }
         val searches = ArrayList<String>()
-        searches += t.terms.joinToString(" ")
-        searches += main.joinToString(" ")
-        if (main.size > 2) searches += main.takeLast(2).joinToString(" ")
-        main.zipWithNext().forEach { (a, b) -> searches += "$a $b" }
-        searches += main.take(5)
+        searches += t.terms.joinToString(" ") { stem(it) }
+        searches += main.joinToString(" ") { stem(it) }
+        if (main.size > 2) searches += main.takeLast(2).joinToString(" ") { stem(it) }
+        main.zipWithNext().forEach { (a, b) -> searches += "${stem(a)} ${stem(b)}" }
+        searches += main.take(5).map(::stem)
         val seen = HashSet<Long>()
         val cands = ArrayList<UsdaDatabase.Candidate>()
         for (s in searches.distinct()) {
@@ -485,6 +505,9 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             s.lowercase().replace("'", "").split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
 
         private val KEEP = setOf("fries", "nachos", "hummus", "couscous", "asparagus", "swiss", "molasses", "chips")
+
+        /** What to search for so "strawberry" also finds "strawberries" (the search matches word starts). */
+        private fun stem(w: String): String = if (w.length > 4 && w.endsWith("y")) w.dropLast(1) else w
 
         internal fun singular(w: String): String = when {
             w in KEEP || w.length <= 3 -> w
