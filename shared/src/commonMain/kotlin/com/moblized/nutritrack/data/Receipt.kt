@@ -246,11 +246,11 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
         var head = nouns.last()
         val main = t.terms.filter { t.kinds[it] != Kind.WITH }.ifEmpty { t.terms }
         val searches = ArrayList<String>()
-        searches += t.terms.joinToString(" ")
-        searches += main.joinToString(" ")
-        if (main.size > 2) searches += main.takeLast(2).joinToString(" ")
-        main.zipWithNext().forEach { (a, b) -> searches += "$a $b" }
-        searches += main.take(5)
+        searches += t.terms.joinToString(" ") { stem(it) }
+        searches += main.joinToString(" ") { stem(it) }
+        if (main.size > 2) searches += main.takeLast(2).joinToString(" ") { stem(it) }
+        main.zipWithNext().forEach { (a, b) -> searches += "${stem(a)} ${stem(b)}" }
+        searches += main.take(5).map(::stem)
         val seen = HashSet<Long>()
         val cands = ArrayList<UsdaDatabase.Candidate>()
         for (s in searches.distinct()) {
@@ -505,6 +505,9 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             s.lowercase().replace("'", "").split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
 
         private val KEEP = setOf("fries", "nachos", "hummus", "couscous", "asparagus", "swiss", "molasses", "chips")
+
+        /** What to search for so "strawberry" also finds "strawberries" (the search matches word starts). */
+        private fun stem(w: String): String = if (w.length > 4 && w.endsWith("y")) w.dropLast(1) else w
 
         internal fun singular(w: String): String = when {
             w in KEEP || w.length <= 3 -> w
