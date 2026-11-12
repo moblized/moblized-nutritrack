@@ -14,6 +14,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,9 +33,13 @@ import com.moblized.nutritrack.data.AiModel
 import com.moblized.nutritrack.data.Graph
 import com.moblized.nutritrack.data.OpenWebUiClient
 import com.moblized.nutritrack.data.Settings
+import com.moblized.nutritrack.data.nowMillis
+import com.moblized.nutritrack.resources.Res
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.ExperimentalResourceApi
 
 /** Connects the user's own Open WebUI server, which reads receipt photos with a vision model. */
+@OptIn(ExperimentalResourceApi::class)
 @Composable
 fun OpenWebUiSettings(settings: Settings) {
     val repo = Graph.app.settings
@@ -47,6 +52,7 @@ fun OpenWebUiSettings(settings: Settings) {
     var ok by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    var sampleRunning by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SwitchLine(
@@ -140,6 +146,36 @@ fun OpenWebUiSettings(settings: Settings) {
                     }
                 }) { Text("Disconnect") }
             }
+        }
+        if (settings.aiConfigured) {
+            OutlinedButton(
+                enabled = !sampleRunning && !testing,
+                onClick = {
+                    sampleRunning = true
+                    ok = true
+                    status = "Sending a sample receipt to ${settings.aiModel}…"
+                    scope.launch {
+                        val start = nowMillis()
+                        status = try {
+                            val photo = Res.readBytes("files/sample_receipt.jpg")
+                            val read = OpenWebUiClient(settings.aiUrl, settings.aiKey).readReceipt(settings.aiModel, listOf(photo), "")
+                            val secs = (nowMillis() - start) / 1000
+                            val items = read.receipt.items
+                            ok = items.isNotEmpty()
+                            if (ok) {
+                                "✓ ${settings.aiModel} read ${items.size} items in $secs s: " +
+                                    items.joinToString(", ") { (if (it.quantity != 1.0) "${fmtQty(it.quantity)} × " else "") + (it.query ?: it.text) }
+                            } else {
+                                "${settings.aiModel} answered in $secs s but found no food on the sample receipt"
+                            }
+                        } catch (e: AiException) {
+                            ok = false
+                            e.message ?: "The test didn't work"
+                        }
+                        sampleRunning = false
+                    }
+                },
+            ) { Text(if (sampleRunning) "Reading the sample…" else "Test with a sample receipt") }
         }
         if (model != settings.aiModel && model.isNotBlank()) {
             TextButton(onClick = { scope.launch { repo.setAiModel(model) } }) { Text("Use $model") }

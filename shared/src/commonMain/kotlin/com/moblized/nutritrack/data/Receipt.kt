@@ -95,6 +95,36 @@ object ReceiptParser {
     /** Mexican food on the receipt, so "Chips" means tortilla chips. */
     fun isMexican(lines: List<String>): Boolean = lines.any { MEXICAN.containsMatchIn(it) }
 
+    private val COMBO_WORDS = setOf("meal", "combo", "plate", "platter", "box", "bundle", "bento", "deal", "feast", "bucket")
+    private val COMBO_FILLER = setOf(
+        "small", "medium", "large", "bigger", "regular", "kids", "kid", "family", "value", "double", "single",
+        "bowl", "special", "set", "entree", "entrees", "side", "sides", "lunch", "dinner", "breakfast", "pick", "choice",
+        "your", "any", "one", "two", "three", "num", "no", "sm", "md", "lg", "reg",
+    )
+
+    private fun comboWords(text: String) = text.lowercase().split(Regex("[^a-z]+")).filter { it.length > 1 }
+
+    /** "Bigger Plate", "Kids Meal", "Big Mac Meal", "Bowl": something that holds the dishes listed under it. */
+    private fun isCombo(text: String): Boolean {
+        val w = comboWords(text)
+        return w.any { it in COMBO_WORDS } || w.all { it in COMBO_FILLER }
+    }
+
+    /** The dish a combo is named after ("Big Mac Meal" -> "Big Mac"), if any. */
+    private fun mainDish(text: String): String? =
+        comboWords(text).filter { it !in COMBO_WORDS && it !in COMBO_FILLER }.joinToString(" ").ifBlank { null }
+            ?.let { words -> text.split(' ').filter { it.lowercase().filter(Char::isLetter) in words.split(' ') }.joinToString(" ") }
+            ?.ifBlank { null }
+
+    private fun cleanPart(text: String) =
+        text.replace(Regex("""^[\s+*>•·.-]+"""), "").replace(Regex("""^\d{1,2}\s*[xX]?\s+(?=\S*[A-Za-z])"""), "").trim()
+
+    /** "JAX 1.24": a misread TAX line. */
+    private fun misreadTax(text: String): Boolean {
+        val w = text.trim().lowercase()
+        return w.length in 3..4 && w.all { it.isLetter() } && ReceiptMatcher.editDistance(w, "tax", 1) <= 1
+    }
+
     /** Totals, tax, payment and the like. */
     fun looksLikeNotFood(text: String): Boolean = SKIP.containsMatchIn(text.lowercase())
 
@@ -137,6 +167,9 @@ object ReceiptParser {
         val priced = cleaned.count { it.price != null && letters(it.text) >= 3 }
         val items = ArrayList<ReceiptItem>()
         val skipped = ArrayList<String>()
+        // Dishes printed without a price under a priced line ("Bigger Plate", then "Orange Chicken"...).
+        val parts = HashMap<Int, MutableList<String>>()
+        var header: Int? = null
         for (row in cleaned) {
             val text = row.text
             val low = text.lowercase()
@@ -151,7 +184,14 @@ object ReceiptParser {
                 PHONE.containsMatchIn(text) || MASKED.containsMatchIn(text) || ADDRESS.containsMatchIn(text) ||
                 CITY.containsMatchIn(text) || WEIGHT.containsMatchIn(text) || row.price?.contains('-') == true
             val modifier = MODIFIER.containsMatchIn(low)
-            if (notFood || NEGATIVE.containsMatchIn(low) || (priced >= 2 && row.price == null && !modifier) ||
+            val negative = NEGATIVE.containsMatchIn(low)
+            if (notFood || misreadTax(text)) header = null
+            if (!notFood && !negative && !modifier && priced >= 2 && row.price == null && header != null) {
+                parts.getOrPut(header!!) { ArrayList() } += cleanPart(text)
+                skipped += row.raw
+                continue
+            }
+            if (notFood || negative || misreadTax(text) || (priced >= 2 && row.price == null && !modifier) ||
                 (store != null && row.raw == lines.first() && row.price == null)
             ) {
                 skipped += row.raw
@@ -200,10 +240,24 @@ object ReceiptParser {
                 continue
             }
             items += ReceiptItem(t, qty, pieces)
+            header = if (row.price != null) items.size - 1 else header
+        }
+        // A combo or plate is the dishes in it; anything else (a burrito bowl and its fillings) is the dish itself.
+        val expanded = ArrayList<ReceiptItem>()
+        items.forEachIndexed { i, item ->
+            val inside = parts[i].orEmpty().filter { letters(it) >= 3 }
+            if (inside.isEmpty() || !isCombo(item.text)) {
+                expanded += item
+                return@forEachIndexed
+            }
+            val main = mainDish(item.text)
+            if (main != null && inside.none { it.contains(main, ignoreCase = true) }) expanded += item.copy(text = main)
+            inside.forEach { expanded += ReceiptItem(it, item.quantity) }
+            skipped.removeAll { raw -> inside.any { raw.contains(it, ignoreCase = true) } }
         }
         // The same thing rung up twice is one row with a bigger quantity.
         val merged = ArrayList<ReceiptItem>()
-        for (it in items) {
+        for (it in expanded) {
             val i = merged.indexOfFirst { o -> o.text.equals(it.text, ignoreCase = true) && o.pieces == it.pieces }
             if (i >= 0) merged[i] = merged[i].copy(quantity = merged[i].quantity + it.quantity) else merged += it
         }
@@ -227,6 +281,7 @@ data class ReceiptMatch(
  * at a typical serving (or the size and piece count on the receipt).
  */
 class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal: List<Food> = emptyList()) {
+    private val vocabulary: Map<String, Int> by lazy { runCatching { usda.vocabulary() }.getOrDefault(emptyMap()) }
 
     private enum class Kind { NOUN, DESC, WITH }
 
@@ -343,7 +398,7 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             }
             if (w.first().isDigit()) return@forEachIndexed // 2l, 12oz, 16
             val rep = ABBR[w]
-            val parts = rep?.split(' ') ?: if (w !in DROP && w.length > 1) listOf(w) else emptyList()
+            val parts = rep?.split(' ') ?: if (w !in DROP && w.length > 1) listOf(fixWord(w, last = i == ws.lastIndex)) else emptyList()
             parts.forEach { out += it to after }
         }
         val terms = ArrayList<String>()
@@ -360,6 +415,31 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             }
         }
         return Terms(terms, kinds, size)
+    }
+
+    /** A word the phone misread ("terivaki") or the receipt cut off ("chi"), spelled as the food database does. */
+    private fun fixWord(w: String, last: Boolean): String {
+        val vocab = vocabulary
+        if (vocab.isEmpty() || w.length < 3 || w.any { it.isDigit() } || w in vocab || singular(w) in vocab) return w
+        if (w.length >= 4) {
+            val maxD = if (w.length >= 8) 2 else 1
+            var best: String? = null
+            var bestD = maxD + 1
+            var bestN = 0
+            for ((v, n) in vocab) {
+                if (v[0] != w[0] || abs(v.length - w.length) > maxD) continue
+                val d = editDistance(w, v, maxD)
+                if (d < bestD || (d == bestD && n > bestN)) {
+                    best = v
+                    bestD = d
+                    bestN = n
+                }
+            }
+            if (best != null) return best
+        }
+        // Cut off at the edge of the receipt: the most common word it's the start of.
+        if (!last) return w
+        return vocab.entries.filter { it.key.length > w.length && it.key.startsWith(w) }.maxByOrNull { it.value }?.key ?: w
     }
 
     // ---------- choosing the food ----------
@@ -399,7 +479,9 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             lead = d.segs[1]
             li = 1
         }
-        fun extra(seg: List<String>) = seg.filter { it !in terms && it !in FILLER && !isBrandWord(it) && it !in DEFAULTS }
+        // "Chicken or turkey with teriyaki": the "or" alternative doesn't count against the dish.
+        val alt = OR_ALT.findAll(d.text).map { singular(it.groupValues[1]) }.toSet()
+        fun extra(seg: List<String>) = seg.filter { it !in terms && it !in FILLER && !isBrandWord(it) && it !in DEFAULTS && it !in alt }
         val leadExtra = extra(lead)
         if (leadExtra.isEmpty()) sc += 1.0
         sc -= 0.35 * leadExtra.size
@@ -418,7 +500,7 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             }
             sc -= 0.3 * min(3, extras)
         }
-        sc -= 1.2 * d.words.count { it in BAD && it !in terms && it !in neg }
+        sc -= 1.2 * d.words.count { it in BAD && it !in terms && it !in neg && it !in alt }
         sc += 0.3 * d.words.count { it in DEFAULTS && it !in terms }
         if ("raw" in d.words) sc += 0.2
         if ("restaurant" in d.words || "fast" in d.words) sc += 0.3
@@ -485,6 +567,7 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
 
         private val INCLUDES = Regex("""\s*\((?:includes|Includes)[^)]*\)""")
         private val NEGATED = Regex("""\b(no|without)\s+(\w+)""")
+        private val OR_ALT = Regex("""\bor\s+(\w+)""")
         private val WITH = Regex("""\bwith\b(.*)""")
         private val SPLIT_HINT = Regex("""\s(&|and|w/|with|\+|n)\s""")
         private val SPLIT = Regex("""\s+(?:&|and|w/|with|\+|n)\s+|\s*w/\s*""", RegexOption.IGNORE_CASE)
@@ -505,6 +588,24 @@ class ReceiptMatcher(private val usda: FoodCandidateSource, private val personal
             s.lowercase().replace("'", "").split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
 
         private val KEEP = setOf("fries", "nachos", "hummus", "couscous", "asparagus", "swiss", "molasses", "chips")
+
+        /** Levenshtein distance, or [max] + 1 once it's clearly more than [max]. */
+        internal fun editDistance(a: String, b: String, max: Int): Int {
+            if (abs(a.length - b.length) > max) return max + 1
+            var prev = IntArray(b.length + 1) { it }
+            for (i in 1..a.length) {
+                val cur = IntArray(b.length + 1)
+                cur[0] = i
+                var rowMin = i
+                for (j in 1..b.length) {
+                    cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+                    rowMin = min(rowMin, cur[j])
+                }
+                if (rowMin > max) return max + 1
+                prev = cur
+            }
+            return prev[b.length]
+        }
 
         /** What to search for so "strawberry" also finds "strawberries" (the search matches word starts). */
         private fun stem(w: String): String = if (w.length > 4 && w.endsWith("y")) w.dropLast(1) else w

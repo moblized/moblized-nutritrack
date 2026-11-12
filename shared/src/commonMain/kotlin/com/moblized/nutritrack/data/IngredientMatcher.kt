@@ -264,6 +264,9 @@ object IngredientParser {
 interface FoodCandidateSource {
     fun candidates(query: String, limit: Int): List<UsdaDatabase.Candidate>
     fun food(id: Long): Food?
+
+    /** Every word in the foods' names, with how many names use it (to fix misread receipt words). */
+    fun vocabulary(): Map<String, Int> = emptyMap()
 }
 
 /**

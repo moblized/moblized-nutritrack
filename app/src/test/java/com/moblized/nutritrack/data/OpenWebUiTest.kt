@@ -23,8 +23,12 @@ class OpenWebUiTest {
     private fun quote(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 
     /** An OpenAI-style chat completion, as Open WebUI sends it. */
-    private fun reply(content: String) =
-        """{"id": "chatcmpl-1", "object": "chat.completion", "choices": [{"index": 0, "message": {"role": "assistant", "content": ${quote(content)}}}]}"""
+    private fun reply(content: String, finish: String = "stop", reasoning: String? = null) =
+        """{"id": "chatcmpl-1", "object": "chat.completion", "choices": [{"index": 0, "finish_reason": "$finish", """ +
+            """"message": {"role": "assistant", "content": ${quote(content)}""" +
+            (reasoning?.let { """, "reasoning_content": ${quote(it)}""" } ?: "") + "}}]}"
+
+    private val goodAnswer = """{"store": null, "items": [{"text": "GV WHL MILK", "name": "whole milk", "quantity": 1}]}"""
 
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
 
@@ -92,7 +96,63 @@ class OpenWebUiTest {
         assertTrue(sent.contains("\"model\":\"qwen2.5vl:7b\""))
         assertTrue(sent.contains("data:image/jpeg;base64,AQID"))
         assertTrue(sent.contains("GV WHL MILK 3.12 N")) // the phone's reading goes along as a hint
+        // Strict JSON, thinking off and room for the photo.
+        assertTrue(sent.contains("\"json_schema\""))
+        assertTrue(sent.contains("\"num_ctx\":16384"))
+        assertTrue(sent.contains("\"think\":false"))
         assertEquals("whole milk", result.receipt.items.single().query)
+    }
+
+    private fun client(vararg answers: Pair<HttpStatusCode, String>, sent: MutableList<String> = ArrayList()): OpenWebUiClient {
+        var n = 0
+        val engine = MockEngine { req ->
+            sent += (req.body as TextContent).text
+            val (status, body) = answers[minOf(n++, answers.size - 1)]
+            respond(body, status, json)
+        }
+        return OpenWebUiClient("https://ai.example.com", "sk-test", HttpClient(engine) { install(HttpTimeout) })
+    }
+
+    @Test
+    fun asksPlainlyWhenTheServerRefusesTheExtras() = runBlocking {
+        val sent = ArrayList<String>()
+        val c = client(
+            HttpStatusCode.BadRequest to """{"detail": "Unrecognized request argument supplied: options"}""",
+            HttpStatusCode.OK to reply(goodAnswer),
+            sent = sent,
+        )
+        val r = c.readReceipt("gpt-4o", listOf(byteArrayOf(1)), "")
+        assertEquals(2, sent.size)
+        assertTrue(sent[0].contains("response_format"))
+        assertTrue(!sent[1].contains("response_format") && !sent[1].contains("num_ctx"))
+        assertEquals("whole milk", r.receipt.items.single().query)
+    }
+
+    @Test
+    fun readsAnAnswerLeftInTheReasoning() = runBlocking {
+        val r = client(HttpStatusCode.OK to reply("", reasoning = "The items are... $goodAnswer"))
+            .readReceipt("qwen3-vl:8b", listOf(byteArrayOf(1)), "")
+        assertEquals("whole milk", r.receipt.items.single().query)
+    }
+
+    @Test
+    fun explainsWhyThereIsNoAnswer() = runBlocking {
+        fun failure(vararg answers: Pair<HttpStatusCode, String>): String = try {
+            runBlocking { client(*answers).readReceipt("m", listOf(byteArrayOf(1)), "") }
+            "no error"
+        } catch (e: AiException) {
+            e.message.orEmpty()
+        }
+        val outOfRoom = failure(HttpStatusCode.OK to reply("", finish = "length"))
+        assertTrue(outOfRoom, outOfRoom.contains("ran out of room"))
+        val blind = failure(HttpStatusCode.OK to reply("I can't see any image in your message."))
+        assertTrue(blind, blind.contains("It said: \"I can't see any image"))
+        val empty = failure(HttpStatusCode.OK to reply(""))
+        assertTrue(empty, empty.contains("vision model"))
+        val html = failure(HttpStatusCode.OK to "<!doctype html><html>Open WebUI</html>")
+        assertTrue(html, html.contains("isn't an answer"))
+        val key = failure(HttpStatusCode.Unauthorized to """{"detail": "Not authenticated"}""")
+        assertEquals("Open WebUI didn't accept the API key", key)
     }
 
     @Test

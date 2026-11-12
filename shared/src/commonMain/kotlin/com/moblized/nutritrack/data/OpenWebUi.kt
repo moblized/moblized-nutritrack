@@ -27,7 +27,13 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.roundToInt
 
-class AiException(message: String) : Exception(message)
+class AiException(
+    message: String,
+    /** The server couldn't be reached or refused the key: asking again won't help. */
+    val unreachable: Boolean = false,
+    /** Says little about what went wrong. */
+    val vague: Boolean = false,
+) : Exception(message)
 
 data class AiModel(val id: String, val name: String)
 
@@ -53,40 +59,76 @@ class OpenWebUiClient(baseUrl: String, private val apiKey: String, private val c
         }
     }
 
-    /** Reads the food on a receipt from its photos; the phone's own reading of the text helps smaller models. */
-    @OptIn(ExperimentalEncodingApi::class)
+    /**
+     * Reads the food on a receipt from its photos; the phone's own reading of the text helps smaller models.
+     * Asks for strict JSON first (with thinking off and room for the photo); if the server or model won't do that,
+     * asks once more plainly.
+     */
     suspend fun readReceipt(model: String, images: List<ByteArray>, phoneText: String): AiReceipt {
         if (images.isEmpty()) throw AiException("No photo to send")
-        val request = buildJsonObject {
-            put("model", model)
-            put("stream", false)
-            put("temperature", 0)
-            putJsonArray("messages") {
-                addJsonObject {
-                    put("role", "system")
-                    put("content", RECEIPT_PROMPT)
+        val first = try {
+            return AiReceipt(parseReply(answer(request(model, images, phoneText, strict = true))), model)
+        } catch (e: AiException) {
+            if (e.unreachable) throw e
+            e
+        }
+        try {
+            return AiReceipt(parseReply(answer(request(model, images, phoneText, strict = false))), model)
+        } catch (e: AiException) {
+            if (e.unreachable) throw e
+            // The plain attempt's reason, unless it says less than the first one did.
+            throw if (e.message == first.message || e.vague) first else e
+        }
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun request(model: String, images: List<ByteArray>, phoneText: String, strict: Boolean): String = buildJsonObject {
+        put("model", model)
+        put("stream", false)
+        put("temperature", 0)
+        if (strict) {
+            // Open WebUI turns these into Ollama's structured output, "think": false and a bigger context window.
+            putJsonObject("response_format") {
+                put("type", "json_schema")
+                putJsonObject("json_schema") {
+                    put("name", "receipt")
+                    put("schema", parseJson(RECEIPT_SCHEMA)!!)
                 }
-                addJsonObject {
-                    put("role", "user")
-                    putJsonArray("content") {
+            }
+            putJsonObject("options") {
+                put("num_ctx", 16384)
+                put("think", false)
+            }
+        }
+        putJsonArray("messages") {
+            addJsonObject {
+                put("role", "system")
+                put("content", RECEIPT_PROMPT)
+            }
+            addJsonObject {
+                put("role", "user")
+                putJsonArray("content") {
+                    addJsonObject {
+                        put("type", "text")
+                        put(
+                            "text",
+                            "Read this receipt" + (if (images.size > 1) " (${images.size} photos, top to bottom)" else "") + "." +
+                                (if (phoneText.isNotBlank()) "\n\nThe phone's own reading of the text, which may have mistakes:\n" + phoneText.take(6000) else ""),
+                        )
+                    }
+                    for (img in images) {
                         addJsonObject {
-                            put("type", "text")
-                            put(
-                                "text",
-                                "Read this receipt" + (if (images.size > 1) " (${images.size} photos, top to bottom)" else "") + ".\n\n" +
-                                    "The phone's own reading of the text, which may have mistakes:\n" + phoneText.take(6000),
-                            )
-                        }
-                        for (img in images) {
-                            addJsonObject {
-                                put("type", "image_url")
-                                putJsonObject("image_url") { put("url", "data:image/jpeg;base64," + Base64.encode(img)) }
-                            }
+                            put("type", "image_url")
+                            putJsonObject("image_url") { put("url", "data:image/jpeg;base64," + Base64.encode(img)) }
                         }
                     }
                 }
             }
         }
+    }.toString()
+
+    /** Sends the request and returns the model's answer text, or says plainly why there isn't one. */
+    private suspend fun answer(request: String): String {
         val body = call {
             client.post("$base/api/chat/completions") {
                 auth()
@@ -96,14 +138,32 @@ class OpenWebUiClient(baseUrl: String, private val apiKey: String, private val c
                     socketTimeoutMillis = 180_000
                 }
                 contentType(ContentType.Application.Json)
-                setBody(request.toString())
+                setBody(request)
             }
         }
-        val content = parseObject(body)?.arr("choices")?.objects()?.firstOrNull()?.obj("message")?.let { msg ->
-            (msg["content"] as? JsonPrimitive)?.contentOrNull
-                ?: (msg["content"] as? JsonArray)?.objects()?.map { it.str("text") }?.joinToString("\n")
-        }?.takeIf { it.isNotBlank() } ?: throw AiException(errorDetail(body) ?: "Open WebUI sent no answer")
-        return AiReceipt(parseReply(content), model)
+        val root = parseObject(body)
+            ?: throw AiException("Open WebUI sent something that isn't an answer: \"${body.trim().take(80)}\"", vague = true)
+        val choice = root.arr("choices")?.objects()?.firstOrNull()
+            ?: throw AiException(errorDetail(body) ?: "Open WebUI sent no answer", vague = errorDetail(body) == null)
+        val msg = choice.obj("message")
+        val content = msg?.let {
+            (it["content"] as? JsonPrimitive)?.contentOrNull
+                ?: (it["content"] as? JsonArray)?.objects()?.map { part -> part.str("text") }?.joinToString("\n")
+        }.orEmpty()
+        if (content.isNotBlank()) return content
+        // A "thinking" model can leave its answer in its reasoning.
+        val reasoning = listOf("reasoning_content", "reasoning", "thinking").firstNotNullOfOrNull { k ->
+            (msg?.get(k) as? JsonPrimitive)?.contentOrNull?.takeIf { it.contains('{') || it.contains('[') }
+        }
+        if (reasoning != null) return reasoning
+        throw when (choice.str("finish_reason")) {
+            "length" -> AiException(
+                "The model ran out of room before it answered. In Open WebUI, raise its context length (num_ctx) " +
+                    "or choose a smaller vision model",
+            )
+            "content_filter" -> AiException("The model's safety filter blocked the answer")
+            else -> AiException("The model sent an empty answer. Check that it can read images (a vision model)", vague = true)
+        }
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.auth() {
@@ -118,13 +178,13 @@ class OpenWebUiClient(baseUrl: String, private val apiKey: String, private val c
             throw e
         } catch (e: Exception) {
             val why = e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
-            throw AiException("Couldn't reach Open WebUI at $base$why")
+            throw AiException("Couldn't reach Open WebUI at $base$why", unreachable = true)
         }
         val text = r.bodyAsText()
         when (r.status.value) {
             in 200..299 -> return text
-            401, 403 -> throw AiException("Open WebUI didn't accept the API key")
-            404 -> throw AiException("No Open WebUI at $base (or that model isn't there)")
+            401, 403 -> throw AiException("Open WebUI didn't accept the API key", unreachable = true)
+            404 -> throw AiException("No Open WebUI at $base (or that model isn't there)", unreachable = true)
             else -> throw AiException(errorDetail(text) ?: "Open WebUI error ${r.status.value}")
         }
     }
@@ -144,11 +204,20 @@ class OpenWebUiClient(baseUrl: String, private val apiKey: String, private val c
             - "size": "small", "medium" or "large" if the receipt says a size, otherwise null.
             - "pieces": the piece count for things sold by count, like "6 pc nuggets" or "wings (12)", otherwise null.
             Add-ons printed under an item with their own price (like "+ guacamole") are separate items.
-            Options without a price ("no onions", "white rice" in a bowl) are part of the item above, not items.
+            Options without a price ("no onions", "white rice" in a burrito bowl) are part of the item above, not items.
+            But for a combo, plate or meal ("Bigger Plate", "Kids Meal", "#3 Combo"), list the dishes printed under it
+            as the items instead of the combo itself.
+            Receipts are often faded or misprinted: read words as the food they most likely are ("Terivaki Chi" is teriyaki chicken).
             Also give "store": the store or restaurant name, or null.
             Answer with JSON only, exactly like:
             {"store": "McDonald's", "items": [{"text": "1 M FRY", "name": "french fries", "quantity": 1, "size": "medium", "pieces": null}]}
         """.trimIndent()
+
+        /** The answer's shape, for servers that can hold the model to it. */
+        private const val RECEIPT_SCHEMA = """{"type":"object","properties":{"store":{"type":["string","null"]},
+            "items":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"name":{"type":"string"},
+            "quantity":{"type":"number"},"size":{"type":["string","null"]},"pieces":{"type":["integer","null"]}},
+            "required":["text","name","quantity"]}}},"required":["items"]}"""
 
         private val THINK = Regex("""<think>[\s\S]*?</think>""", RegexOption.IGNORE_CASE)
         private val LEADING_COUNT = Regex("""^\d{1,2}\s*[xX]?\s+(?=\S*[A-Za-z])""")
@@ -165,7 +234,7 @@ class OpenWebUiClient(baseUrl: String, private val apiKey: String, private val c
                 val asArray = if (a1 >= 0 && a2 > a1) parseJson(text.substring(a1, a2 + 1)) else null
                 // An object with items, or just the list of items.
                 (asObject as? JsonObject)?.takeIf { it.has("items") } ?: asArray ?: asObject
-                    ?: throw AiException("The model didn't answer with a list of items")
+                    ?: throw AiException("The model didn't answer with a list of items. It said: \"${text.take(100)}\"")
             }
             val obj = root as? JsonObject
             val list = obj?.arr("items") ?: (root as? JsonArray) ?: JsonArray(emptyList())

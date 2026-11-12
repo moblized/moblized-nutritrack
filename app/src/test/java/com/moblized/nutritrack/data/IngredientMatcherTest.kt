@@ -31,6 +31,22 @@ internal class JdbcSource(private val conn: Connection) : FoodCandidateSource {
         }
     }
 
+    private val words by lazy {
+        val counts = HashMap<String, Int>()
+        conn.createStatement().use { st ->
+            st.executeQuery("SELECT description FROM foods").use { rs ->
+                while (rs.next()) {
+                    for (w in rs.getString(1).lowercase().replace("'", "").split(Regex("[^a-z0-9]+"))) {
+                        if (w.length > 1 && !w.first().isDigit()) counts[w] = (counts[w] ?: 0) + 1
+                    }
+                }
+            }
+        }
+        counts
+    }
+
+    override fun vocabulary(): Map<String, Int> = words
+
     override fun food(id: Long): Food? {
         conn.prepareStatement("SELECT description, nutrients, portions FROM foods WHERE id = ?").use { st ->
             st.setLong(1, id)
