@@ -34,6 +34,21 @@ class UsdaDatabase(private val path: () -> String) : FoodCandidateSource {
         }
     }
 
+    private var words: Map<String, Int>? = null
+
+    override fun vocabulary(): Map<String, Int> {
+        words?.let { return it }
+        val counts = HashMap<String, Int>()
+        query("SELECT description FROM foods") { st ->
+            while (st.step()) {
+                for (w in st.getText(0).lowercase().replace("'", "").split(WORD_SPLIT)) {
+                    if (w.length > 1 && !w.first().isDigit()) counts[w] = (counts[w] ?: 0) + 1
+                }
+            }
+        }
+        return counts.also { words = it }
+    }
+
     fun search(query: String, limit: Int = 60): List<FoodSummary> {
         val tokens = query.lowercase()
             .split(Regex("[^a-z0-9]+"))
@@ -154,6 +169,7 @@ class UsdaDatabase(private val path: () -> String) : FoodCandidateSource {
     }
 
     companion object {
+        private val WORD_SPLIT = Regex("[^a-z0-9]+")
         const val DB_NAME = "usda.db"
         private val STOP_WORDS = setOf("and", "with", "of", "the", "a", "in", "or", "w")
     }

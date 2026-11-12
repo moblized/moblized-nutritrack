@@ -61,7 +61,7 @@ object ReceiptOcr {
         }
     }
 
-    /** The page as a JPEG of at most about 2.4 megapixels: sharp enough to read, small enough to send. */
+    /** The page as a JPEG of at most about 1.2 megapixels: sharp enough to read, small enough for a local model. */
     private fun jpeg(context: Context, uri: Uri): ByteArray? = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
@@ -88,8 +88,8 @@ object ReceiptOcr {
         }
     }.getOrNull()
 
-    private const val MAX_PIXELS = 2_400_000.0
-    private const val MAX_SIDE = 3200.0
+    private const val MAX_PIXELS = 1_200_000.0
+    private const val MAX_SIDE = 2000.0
 
     /** Waits (up to about a minute) for the reader to finish downloading on first use. */
     private suspend fun recognize(recognizer: TextRecognizer, image: InputImage): Text {

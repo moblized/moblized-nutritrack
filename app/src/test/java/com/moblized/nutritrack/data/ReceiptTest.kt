@@ -89,6 +89,28 @@ class ReceiptTest {
     }
 
     @Test
+    fun aComboPlateIsTheDishesInIt() {
+        val r = ReceiptParser.parse(
+            listOf(
+                "Panda Express", "Store #1234", "1 Bigger Plate 11.40", "Chow Mein", "Orange Chicken", "Beijing Beef",
+                "Grilled Terivaki Chi 1.50", "1 Medium Drink 2.60", "JAX 1.24", "Subtotal 15.50", "Total 16.74",
+            ),
+        )
+        assertEquals(
+            listOf("Chow Mein", "Orange Chicken", "Beijing Beef", "Grilled Terivaki Chi", "Medium Drink"),
+            r.items.map { it.text },
+        )
+        assertTrue("JAX 1.24" in r.skipped) // a misread TAX
+        assertFalse(r.skipped.any { "Orange Chicken" in it })
+    }
+
+    @Test
+    fun aMealIsItsMainDishAndSides() {
+        val r = ReceiptParser.parse(listOf("1 Big Mac Meal 9.49", "Med Fries", "Med Coke", "1 Apple Pie 1.49", "Total 10.98"))
+        assertEquals(listOf("Big Mac", "Med Fries", "Med Coke", "Apple Pie"), r.items.map { it.text })
+    }
+
+    @Test
     fun putsColumnsBackTogether() {
         // Names on the left and prices on the right are read as separate lines, slightly out of level.
         val lines = listOf(
@@ -140,6 +162,11 @@ class ReceiptTest {
             Case("IPA Draft", null, "beer", null),
             Case("Mozzarella Sticks", null, "mozzarella sticks", null),
             Case("House Margarita", null, "margarita", null),
+            // Misread and cut-off words, as the phone reads faded receipts.
+            Case("Grilled Terivaki Chi", null, "teriyaki", null),
+            Case("Orange Chicken", null, "orange chicken", null),
+            Case("Chow Mein", null, "chow mein", null),
+            Case("Steamed Brocoli", null, "broccoli", null),
         )
         val failures = ArrayList<String>()
         for (c in cases) {
